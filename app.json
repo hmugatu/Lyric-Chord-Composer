@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Lyric-Chord-Composer",
-    "slug": "Lyric-Chord-Composer",
+    "slug": "lyric-chord-composer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nagamugatu.lyricchordcomposer"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,13 +23,21 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.nagamugatu.lyricchordcomposer"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a32a8c02-5697-453d-8c32-22b8106bbcd1"
+      }
+    },
+    "owner": "nagamugatu"
   }
 }

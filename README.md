@@ -82,6 +82,26 @@ Lyric-Chord-Composer/
 └── assets/                      # Images, fonts, etc.
 ```
 
+## Build & Deploy
+
+### Quick Deploy Commands
+
+```bash
+# Login to Expo (run this first)
+npx eas-cli login
+
+# Initialize EAS project
+npx eas-cli init --id a32a8c02-5697-453d-8c32-22b8106bbcd1
+
+# Build for Android (recommended to start)
+npx eas-cli build --platform android
+
+# Build for Android and submit to Google Play Store
+npx eas-cli build --platform android --auto-submit
+```
+
+For detailed deployment instructions, iOS builds, troubleshooting, and app store requirements, see [BUILD_DEPLOY.md](BUILD_DEPLOY.md).
+
 ## Current Status
 
 **Phase 1: Foundation - COMPLETED**
@@ -90,6 +110,9 @@ Lyric-Chord-Composer/
 - ✅ Zustand store set up
 - ✅ Basic navigation configured
 - ✅ Initial UI screens created
+- ✅ Composition export/import with .hmlcc file format
+- ✅ Local caching with AsyncStorage
+- ✅ Cross-platform file handling
 
 **Next Steps (Phase 2): Chord System**
 - Implement chord diagram display with SVG

@@ -6,11 +6,19 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { Composition, Section, GlobalSettings } from '../models';
 import { STANDARD_TUNING } from '../models/Note';
+import { CompositionStorageService } from '../services/compositionService';
+import { CompositionCache } from '../services/cache';
 
 interface CompositionState {
   // Current composition
   currentComposition: Composition | null;
   compositions: Composition[];
+
+  // Storage state
+  isLoading: boolean;
+  isSaving: boolean;
+  error: string | null;
+  lastCacheUpdate: Date | null;
 
   // Actions
   createComposition: (title: string, artist?: string) => void;
@@ -26,6 +34,18 @@ interface CompositionState {
 
   // Global settings
   updateGlobalSettings: (settings: Partial<GlobalSettings>) => void;
+
+  // File operations
+  exportComposition: (id: string) => Promise<void>;
+  exportAllCompositions: () => Promise<void>;
+  importComposition: () => Promise<void>;
+  importCompositions: () => Promise<void>;
+
+  // Cache operations
+  loadFromCache: () => Promise<void>;
+  saveToCache: () => Promise<void>;
+  clearCache: () => Promise<void>;
+  initializeStore: () => Promise<void>;
 }
 
 const createDefaultGlobalSettings = (): GlobalSettings => ({
@@ -46,10 +66,18 @@ const createNewComposition = (title: string, artist?: string): Composition => ({
   tags: [],
 });
 
+// Initialize services
+const storageService = new CompositionStorageService();
+const cacheService = new CompositionCache();
+
 export const useCompositionStore = create<CompositionState>()(
-  immer((set) => ({
+  immer((set, get) => ({
     currentComposition: null,
     compositions: [],
+    isLoading: false,
+    isSaving: false,
+    error: null,
+    lastCacheUpdate: null,
 
     createComposition: (title: string, artist?: string) => {
       set((state) => {
@@ -158,6 +186,184 @@ export const useCompositionStore = create<CompositionState>()(
           state.currentComposition.updatedAt = new Date();
         }
       });
+    },
+
+    // File operations
+    exportComposition: async (id: string) => {
+      try {
+        set((state) => {
+          state.isSaving = true;
+          state.error = null;
+        });
+
+        const composition = get().compositions.find((c) => c.id === id);
+        if (!composition) {
+          throw new Error('Composition not found');
+        }
+
+        await storageService.exportComposition(composition);
+
+        set((state) => {
+          state.isSaving = false;
+        });
+      } catch (error) {
+        set((state) => {
+          state.isSaving = false;
+          state.error = error instanceof Error ? error.message : 'Export failed';
+        });
+        throw error;
+      }
+    },
+
+    exportAllCompositions: async () => {
+      try {
+        set((state) => {
+          state.isSaving = true;
+          state.error = null;
+        });
+
+        await storageService.exportCompositions(get().compositions);
+
+        set((state) => {
+          state.isSaving = false;
+        });
+      } catch (error) {
+        set((state) => {
+          state.isSaving = false;
+          state.error = error instanceof Error ? error.message : 'Export failed';
+        });
+        throw error;
+      }
+    },
+
+    importComposition: async () => {
+      try {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
+
+        const composition = await storageService.importComposition();
+
+        set((state) => {
+          // Check if composition already exists
+          const existingIndex = state.compositions.findIndex(
+            (c) => c.id === composition.id
+          );
+
+          if (existingIndex >= 0) {
+            // Replace existing composition
+            state.compositions[existingIndex] = composition;
+          } else {
+            // Add new composition
+            state.compositions.push(composition);
+          }
+
+          state.isLoading = false;
+        });
+
+        // Save to cache
+        await get().saveToCache();
+      } catch (error) {
+        set((state) => {
+          state.isLoading = false;
+          state.error = error instanceof Error ? error.message : 'Import failed';
+        });
+        throw error;
+      }
+    },
+
+    importCompositions: async () => {
+      try {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
+
+        const compositions = await storageService.importCompositions();
+
+        set((state) => {
+          compositions.forEach((composition) => {
+            const existingIndex = state.compositions.findIndex(
+              (c) => c.id === composition.id
+            );
+
+            if (existingIndex >= 0) {
+              state.compositions[existingIndex] = composition;
+            } else {
+              state.compositions.push(composition);
+            }
+          });
+
+          state.isLoading = false;
+        });
+
+        // Save to cache
+        await get().saveToCache();
+      } catch (error) {
+        set((state) => {
+          state.isLoading = false;
+          state.error = error instanceof Error ? error.message : 'Import failed';
+        });
+        throw error;
+      }
+    },
+
+    // Cache operations
+    loadFromCache: async () => {
+      try {
+        set((state) => {
+          state.isLoading = true;
+          state.error = null;
+        });
+
+        const compositions = await cacheService.loadFromCache();
+
+        set((state) => {
+          state.compositions = compositions;
+          state.isLoading = false;
+          state.lastCacheUpdate = new Date();
+        });
+      } catch (error) {
+        set((state) => {
+          state.isLoading = false;
+          state.error =
+            error instanceof Error ? error.message : 'Failed to load cache';
+        });
+      }
+    },
+
+    saveToCache: async () => {
+      try {
+        await cacheService.saveToCache(get().compositions);
+
+        set((state) => {
+          state.lastCacheUpdate = new Date();
+        });
+      } catch (error) {
+        console.error('Failed to save to cache:', error);
+      }
+    },
+
+    clearCache: async () => {
+      try {
+        await cacheService.clearCache();
+
+        set((state) => {
+          state.lastCacheUpdate = null;
+        });
+      } catch (error) {
+        set((state) => {
+          state.error =
+            error instanceof Error ? error.message : 'Failed to clear cache';
+        });
+        throw error;
+      }
+    },
+
+    initializeStore: async () => {
+      // Load compositions from cache on app startup
+      await get().loadFromCache();
     },
   }))
 );
