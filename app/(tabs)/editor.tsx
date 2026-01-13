@@ -1,13 +1,68 @@
-import React from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Text, Button, Card, SegmentedButtons } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { Text, Button, Card, SegmentedButtons, ActivityIndicator, Dialog, Portal } from 'react-native-paper';
 import { useCompositionStore } from '../../src/store/compositionStore';
+import { CompositionStorageService } from '../../src/services/compositionService';
+import { CompositionSyncManager } from '../../src/services/compositionSyncManager';
 
 type EditorView = 'chords' | 'tabs' | 'notation' | 'lyrics';
 
 export default function EditorScreen() {
   const [currentView, setCurrentView] = React.useState<EditorView>('chords');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const currentComposition = useCompositionStore((state) => state.currentComposition);
+  const storageService = new CompositionStorageService();
+  const syncManager = new CompositionSyncManager();
+
+  const handleSaveToDesktop = async () => {
+    if (!currentComposition) return;
+    try {
+      setIsSaving(true);
+      await storageService.setProvider('local');
+      await storageService.exportComposition(currentComposition);
+      Alert.alert('Success', 'Composition saved to desktop');
+      setShowSaveDialog(false);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveToGoogleDrive = async () => {
+    if (!currentComposition) return;
+    try {
+      setIsSaving(true);
+      await storageService.setProvider('google-drive');
+      const metadata = await syncManager.uploadCompositionToCloud(currentComposition, 'google-drive');
+      if (metadata) {
+        Alert.alert('Success', 'Composition saved to Google Drive');
+      }
+      setShowSaveDialog(false);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save to Google Drive');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveToOneDrive = async () => {
+    if (!currentComposition) return;
+    try {
+      setIsSaving(true);
+      await storageService.setProvider('onedrive');
+      const metadata = await syncManager.uploadCompositionToCloud(currentComposition, 'onedrive');
+      if (metadata) {
+        Alert.alert('Success', 'Composition saved to OneDrive');
+      }
+      setShowSaveDialog(false);
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to save to OneDrive');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (!currentComposition) {
     return (
@@ -28,10 +83,17 @@ export default function EditorScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text variant="headlineSmall">{currentComposition.title}</Text>
-        {currentComposition.artist && (
-          <Text variant="bodyMedium">{currentComposition.artist}</Text>
-        )}
+        <View style={styles.headerContent}>
+          <View>
+            <Text variant="headlineSmall">{currentComposition.title}</Text>
+            {currentComposition.artist && (
+              <Text variant="bodyMedium">{currentComposition.artist}</Text>
+            )}
+          </View>
+          <Button mode="contained" onPress={() => setShowSaveDialog(true)} disabled={isSaving}>
+            Save
+          </Button>
+        </View>
       </View>
 
       <SegmentedButtons
@@ -91,6 +153,48 @@ export default function EditorScreen() {
           </Card>
         )}
       </ScrollView>
+
+      <Portal>
+        <Dialog visible={showSaveDialog} onDismiss={() => setShowSaveDialog(false)}>
+          <Dialog.Title>Save Composition To</Dialog.Title>
+          <Dialog.Content>
+            <View style={styles.saveDialogContent}>
+              <Button
+                mode="outlined"
+                onPress={handleSaveToDesktop}
+                disabled={isSaving}
+              >
+                Save to Desktop
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={handleSaveToGoogleDrive}
+                disabled={isSaving}
+              >
+                Save to Google Drive
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={handleSaveToOneDrive}
+                disabled={isSaving}
+              >
+                Save to OneDrive
+              </Button>
+            </View>
+            {isSaving && (
+              <View style={styles.savingContainer}>
+                <ActivityIndicator animating={true} />
+                <Text style={styles.savingText}>Saving...</Text>
+              </View>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowSaveDialog(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -105,6 +209,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   segmented: {
     margin: 16,
@@ -134,5 +243,16 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 8,
+  },
+  saveDialogContent: {
+    gap: 8,
+  },
+  savingContainer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  savingText: {
+    marginTop: 8,
+    color: '#666',
   },
 });

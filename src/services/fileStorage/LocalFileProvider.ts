@@ -5,11 +5,12 @@
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
-import type { ExportOptions, ImportResult } from './types';
+import type { ExportOptions, ImportResult, StorageProvider, FileMetadata } from './types';
 
-export class LocalFileProvider {
+export class LocalFileProvider implements StorageProvider {
   /**
    * Export a composition to a .hmlcc file
    */
@@ -20,12 +21,12 @@ export class LocalFileProvider {
     const finalFilename = filename.endsWith('.hmlcc') ? filename : `${filename}.hmlcc`;
 
     try {
-      // Create file in cache directory
-      const fileUri = `${FileSystem.cacheDirectory}${finalFilename}`;
+      // Create file in document directory
+      const fileUri = `${Paths.document.uri}/${finalFilename}`;
 
       // Write content to file
       await FileSystem.writeAsStringAsync(fileUri, content, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: 'utf8' as any,
       });
 
       // Share/save the file
@@ -73,7 +74,7 @@ export class LocalFileProvider {
 
       // Read file content
       const content = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: 'utf8' as any,
       });
 
       // Validate JSON content
@@ -121,7 +122,7 @@ export class LocalFileProvider {
 
         // Read file content
         const content = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.UTF8,
+          encoding: 'utf8' as any,
         });
 
         // Validate JSON
@@ -142,5 +143,26 @@ export class LocalFileProvider {
       console.error('Import multiple error:', error);
       throw new Error(`Failed to import files: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  // StorageProvider interface implementation
+  async listFiles(): Promise<FileMetadata[]> {
+    return [];
+  }
+
+  async readFile(): Promise<string> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  async writeFile(): Promise<FileMetadata> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  async deleteFile(): Promise<void> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  getProviderName(): string {
+    return 'Local';
   }
 }

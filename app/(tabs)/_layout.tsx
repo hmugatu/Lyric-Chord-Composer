@@ -13,15 +13,6 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Compositions',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="music-note-plus" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="editor"
         options={{
           title: 'Editor',
@@ -31,11 +22,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="library"
+        name="files"
         options={{
-          title: 'Library',
+          title: 'Files',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="library-music" size={size} color={color} />
+            <MaterialCommunityIcons name="history" size={size} color={color} />
           ),
         }}
       />

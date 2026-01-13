@@ -6,9 +6,8 @@ import { ChordProgression } from './Chord';
 import { TimeSignature, GuitarTuning } from './Note';
 import { NotationMeasure } from './Notation';
 import { TabMeasure } from './Tablature';
+import type { SectionType } from './Lyrics';
 import { LyricSection } from './Lyrics';
-
-export type SectionType = "verse" | "chorus" | "bridge" | "intro" | "outro" | "instrumental";
 
 export interface Section {
   id: string;

@@ -23,6 +23,8 @@ interface CompositionState {
   // Actions
   createComposition: (title: string, artist?: string) => void;
   loadComposition: (id: string) => void;
+  addComposition: (composition: Composition) => void;
+  setCurrentComposition: (id: string) => void;
   updateComposition: (updates: Partial<Composition>) => void;
   deleteComposition: (id: string) => void;
 
@@ -84,6 +86,28 @@ export const useCompositionStore = create<CompositionState>()(
         const newComposition = createNewComposition(title, artist);
         state.compositions.push(newComposition);
         state.currentComposition = newComposition;
+      });
+    },
+
+    addComposition: (composition: Composition) => {
+      set((state) => {
+        const existingIndex = state.compositions.findIndex(
+          (c) => c.id === composition.id
+        );
+        if (existingIndex >= 0) {
+          state.compositions[existingIndex] = composition;
+        } else {
+          state.compositions.push(composition);
+        }
+      });
+    },
+
+    setCurrentComposition: (id: string) => {
+      set((state) => {
+        const composition = state.compositions.find((c) => c.id === id);
+        if (composition) {
+          state.currentComposition = composition;
+        }
       });
     },
 
@@ -243,7 +267,8 @@ export const useCompositionStore = create<CompositionState>()(
           state.error = null;
         });
 
-        const composition = await storageService.importComposition();
+        const result = await storageService.importComposition();
+        const composition = result.composition;
 
         set((state) => {
           // Check if composition already exists
@@ -280,10 +305,11 @@ export const useCompositionStore = create<CompositionState>()(
           state.error = null;
         });
 
-        const compositions = await storageService.importCompositions();
+        const results = await storageService.importCompositions();
 
         set((state) => {
-          compositions.forEach((composition) => {
+          results.forEach((result) => {
+            const composition = result.composition;
             const existingIndex = state.compositions.findIndex(
               (c) => c.id === composition.id
             );

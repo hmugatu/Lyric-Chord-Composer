@@ -9,6 +9,9 @@ export interface FileMetadata {
   mimeType: string;
   modifiedTime: Date;
   size: number;
+  sourceProvider?: 'local' | 'google-drive' | 'dropbox' | 'onedrive';
+  sourceUrl?: string;
+  lastSyncedAt?: Date;
 }
 
 export interface StorageProvider {
@@ -28,7 +31,14 @@ export interface StorageProvider {
   getProviderName(): string;
 }
 
-export type StorageProviderType = 'local' | 'google-drive' | 'dropbox';
+export interface CloudProvider extends StorageProvider {
+  // Cloud-specific operations
+  refreshAccessToken?(): Promise<void>;
+  revokeAccess?(): Promise<void>;
+  syncFile?(fileId: string, content: string): Promise<FileMetadata>;
+}
+
+export type StorageProviderType = 'local' | 'google-drive' | 'dropbox' | 'onedrive';
 
 export interface ExportOptions {
   filename: string;
@@ -39,4 +49,12 @@ export interface ExportOptions {
 export interface ImportResult {
   filename: string;
   content: string;
+  metadata?: FileMetadata;
 }
+
+export interface CloudAuthConfig {
+  clientId: string;
+  redirectUrl: string;
+  scopes: string[];
+}
+
