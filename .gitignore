@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Claude temporary files and local settings
+tmpclaude-*
+.claude/settings.local.json
