@@ -1,0 +1,394 @@
+[
+  {
+    "name": "A major",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "2", "0"],
+    "openStrings": [1, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-0-2-2-2-0 (often index mini-barre or fingers 2-3-4)"
+  },
+  {
+    "name": "A major (easy)",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "1", "0"],
+    "openStrings": [1, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Sometimes easier with index on B string"
+  },
+  {
+    "name": "A5 (barre)",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "x", "x"],
+    "openStrings": [1],
+    "mutedStrings": [0, 4, 5],
+    "commonFingeringNotes": "Root open A; index D-2, ring G-2"
+  },
+  {
+    "name": "A7sus4",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "0", "3", "0"],
+    "openStrings": [1, 3, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-0-2-0-3(pinky)-0 common open (or x02233 alt)"
+  },
+  {
+    "name": "A7sus4 (barre)",
+    "startingFret": 5,
+    "fingering": ["x", "5", "5", "5", "5", "5"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 5th fret full (movable dominant shape)"
+  },
+  {
+    "name": "Adim",
+    "startingFret": 0,
+    "fingering": ["x", "0", "1", "2", "1", "x"],
+    "openStrings": [1],
+    "mutedStrings": [0, 5],
+    "commonFingeringNotes": "x-0-1(index)-2(middle)-1(pinky)-x"
+  },
+  {
+    "name": "Am (A minor)",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "1", "0"],
+    "openStrings": [1, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-0-2(middle)-2(ring)-1(index)-0"
+  },
+  {
+    "name": "Asus2",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "0", "0"],
+    "openStrings": [1, 4, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-0-2-2-0-0 drop index from A major B string"
+  },
+  {
+    "name": "Asus4",
+    "startingFret": 0,
+    "fingering": ["x", "0", "2", "2", "3", "0"],
+    "openStrings": [1, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-0-2-2-3(pinky)-0 add pinky to B string"
+  },
+  {
+    "name": "B major",
+    "startingFret": 2,
+    "fingering": ["x", "2", "4", "4", "4", "2"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 2nd fret (index bars), often full shape"
+  },
+  {
+    "name": "B5 (barre)",
+    "startingFret": 2,
+    "fingering": ["x", "2", "4", "4", "x", "x"],
+    "openStrings": [],
+    "mutedStrings": [0, 4, 5],
+    "commonFingeringNotes": "Root A-2; index D-4, ring G-4"
+  },
+  {
+    "name": "B7sus4",
+    "startingFret": 2,
+    "fingering": ["x", "2", "4", "2", "3", "2"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-2-4-2-3-2 (barre at 2nd partial or full)"
+  },
+  {
+    "name": "Bdim",
+    "startingFret": 2,
+    "fingering": ["x", "2", "3", "4", "3", "x"],
+    "openStrings": [],
+    "mutedStrings": [0, 5],
+    "commonFingeringNotes": "x-2-3(index)-4(ring)-3(middle)-x common shape"
+  },
+  {
+    "name": "Bm (B minor)",
+    "startingFret": 2,
+    "fingering": ["x", "2", "4", "4", "3", "2"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 2nd fret (index bars)"
+  },
+  {
+    "name": "Bm7b5 (half-dim)",
+    "startingFret": 2,
+    "fingering": ["x", "2", "3", "2", "3", "x"],
+    "openStrings": [],
+    "mutedStrings": [0, 5],
+    "commonFingeringNotes": "x-2-3(index)-2(middle)-3(ring)-x (common half-diminished)"
+  },
+  {
+    "name": "C major",
+    "startingFret": 0,
+    "fingering": ["x", "3", "2", "0", "1", "0"],
+    "openStrings": [3, 5],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-3(ring)-2(middle)-0-1(index)-0"
+  },
+  {
+    "name": "C major (alt)",
+    "startingFret": 3,
+    "fingering": ["x", "3", "5", "5", "5", "3"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 3rd fret variation"
+  },
+  {
+    "name": "C5 (barre)",
+    "startingFret": 3,
+    "fingering": ["x", "3", "5", "5", "x", "x"],
+    "openStrings": [],
+    "mutedStrings": [0, 4, 5],
+    "commonFingeringNotes": "Root A-3; index D-5, ring G-5"
+  },
+  {
+    "name": "C7sus4",
+    "startingFret": 3,
+    "fingering": ["x", "3", "3", "3", "1", "1"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-3-3-3(index on G)-1(index)-1 (or barre at 3rd partial)"
+  },
+  {
+    "name": "Cdim",
+    "startingFret": 1,
+    "fingering": ["x", "3", "1", "2", "1", "x"],
+    "openStrings": [],
+    "mutedStrings": [0, 5],
+    "commonFingeringNotes": "x-3-1(index)-2(middle)-1(pinky)-x (common open-ish shape)"
+  },
+  {
+    "name": "Cdim (barre)",
+    "startingFret": 3,
+    "fingering": ["x", "3", "5", "4", "5", "3"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 3rd fret diminished shape"
+  },
+  {
+    "name": "Cm (C minor)",
+    "startingFret": 3,
+    "fingering": ["x", "3", "5", "5", "4", "3"],
+    "openStrings": [],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "Barre at 3rd fret minor shape"
+  },
+  {
+    "name": "Csus2",
+    "startingFret": 0,
+    "fingering": ["x", "3", "0", "0", "1", "3"],
+    "openStrings": [2, 3],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-3-0-0-1-3 (or mute high e)"
+  },
+  {
+    "name": "Csus4",
+    "startingFret": 0,
+    "fingering": ["x", "3", "3", "0", "1", "1"],
+    "openStrings": [3],
+    "mutedStrings": [0],
+    "commonFingeringNotes": "x-3(ring)-3(pinky)-0-1(index)-1(index) or partial barre"
+  },
+  {
+    "name": "D major",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "2"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-2(index)-3(ring)-2(pinky/middle)"
+  },
+  {
+    "name": "D major (alt)",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "5"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "Another common voicing"
+  },
+  {
+    "name": "D5 (barre)",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "x"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1, 5],
+    "commonFingeringNotes": "Root open D; index G-2, ring B-3"
+  },
+  {
+    "name": "D7sus4",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "1", "3"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-2(index)-1(middle)-3(pinky) common open variation"
+  },
+  {
+    "name": "D7sus4 (alt)",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "5", "3", "3"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-5-3-3 (higher voicing)"
+  },
+  {
+    "name": "Dm (D minor)",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "1"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-2(index)-3(ring)-1(middle/pinky)"
+  },
+  {
+    "name": "Dsus2",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "0"],
+    "openStrings": [2, 5],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-2-3-0 (drop pinky from D major)"
+  },
+  {
+    "name": "Dsus4",
+    "startingFret": 0,
+    "fingering": ["x", "x", "0", "2", "3", "3"],
+    "openStrings": [2],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-0-2(index)-3(ring)-3(pinky) common open"
+  },
+  {
+    "name": "E major",
+    "startingFret": 0,
+    "fingering": ["0", "2", "2", "1", "0", "0"],
+    "openStrings": [0, 4, 5],
+    "mutedStrings": [],
+    "commonFingeringNotes": "0-2(middle)-2(ring)-1(index)-0-0"
+  },
+  {
+    "name": "E5 (barre)",
+    "startingFret": 0,
+    "fingering": ["0", "2", "2", "x", "x", "x"],
+    "openStrings": [0],
+    "mutedStrings": [3, 4, 5],
+    "commonFingeringNotes": "Root open E; index A-2, ring D-2 (classic open power)"
+  },
+  {
+    "name": "E7sus4",
+    "startingFret": 0,
+    "fingering": ["0", "2", "2", "2", "3", "0"],
+    "openStrings": [0, 5],
+    "mutedStrings": [],
+    "commonFingeringNotes": "0-2-2-2(index on G)-3(ring)-0 (or pinky on B-3)"
+  },
+  {
+    "name": "Em (E minor)",
+    "startingFret": 0,
+    "fingering": ["0", "2", "2", "0", "0", "0"],
+    "openStrings": [0, 3, 4, 5],
+    "mutedStrings": [],
+    "commonFingeringNotes": "0-2(middle)-2(ring)-0-0-0"
+  },
+  {
+    "name": "Esus2",
+    "startingFret": 0,
+    "fingering": ["0", "2", "4", "4", "0", "0"],
+    "openStrings": [0, 4, 5],
+    "mutedStrings": [],
+    "commonFingeringNotes": "0-2-4(index)-4(ring)-0-0 movable shape"
+  },
+  {
+    "name": "Esus4",
+    "startingFret": 0,
+    "fingering": ["0", "2", "2", "2", "0", "0"],
+    "openStrings": [0, 4, 5],
+    "mutedStrings": [],
+    "commonFingeringNotes": "0-2-2-2(index on G)-0-0 (or ring on G)"
+  },
+  {
+    "name": "F major",
+    "startingFret": 1,
+    "fingering": ["1", "3", "3", "2", "1", "1"],
+    "openStrings": [],
+    "mutedStrings": [],
+    "commonFingeringNotes": "Full barre at 1st fret (index bars all)"
+  },
+  {
+    "name": "F major (easy)",
+    "startingFret": 1,
+    "fingering": ["x", "x", "3", "2", "1", "1"],
+    "openStrings": [],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "Partial barre/easy version"
+  },
+  {
+    "name": "F5 (barre)",
+    "startingFret": 1,
+    "fingering": ["1", "3", "3", "x", "x", "x"],
+    "openStrings": [],
+    "mutedStrings": [3, 4, 5],
+    "commonFingeringNotes": "Root low E-1; index A-3, ring D-3"
+  },
+  {
+    "name": "F7sus4",
+    "startingFret": 1,
+    "fingering": ["1", "3", "3", "3", "1", "1"],
+    "openStrings": [],
+    "mutedStrings": [],
+    "commonFingeringNotes": "Barre at 1st fret (index bars all), similar to F7 but 4th replaces 3rd"
+  },
+  {
+    "name": "G major",
+    "startingFret": 0,
+    "fingering": ["3", "2", "0", "0", "0", "3"],
+    "openStrings": [2, 3, 4],
+    "mutedStrings": [],
+    "commonFingeringNotes": "3(ring/pinky)-2(index)-0-0-0-3(pinky/high e)"
+  },
+  {
+    "name": "G major (alt)",
+    "startingFret": 3,
+    "fingering": ["3", "5", "5", "4", "3", "3"],
+    "openStrings": [],
+    "mutedStrings": [],
+    "commonFingeringNotes": "Barre at 3rd fret or four-finger version"
+  },
+  {
+    "name": "G5 (barre)",
+    "startingFret": 3,
+    "fingering": ["3", "x", "5", "5", "x", "x"],
+    "openStrings": [],
+    "mutedStrings": [1, 4, 5],
+    "commonFingeringNotes": "Root low E-3; index D-5, ring G-5"
+  },
+  {
+    "name": "G7sus4",
+    "startingFret": 0,
+    "fingering": ["3", "3", "0", "0", "1", "1"],
+    "openStrings": [2, 3],
+    "mutedStrings": [],
+    "commonFingeringNotes": "3-3(index)-0-0-1-1 (easy open-ish, partial barre)"
+  },
+  {
+    "name": "G7sus4 (barre)",
+    "startingFret": 3,
+    "fingering": ["3", "x", "3", "3", "3", "3"],
+    "openStrings": [],
+    "mutedStrings": [1],
+    "commonFingeringNotes": "Barre at 3rd fret (index bars), ring/pinky on higher strings"
+  },
+  {
+    "name": "Gdim",
+    "startingFret": 3,
+    "fingering": ["x", "x", "5", "3", "2", "3"],
+    "openStrings": [],
+    "mutedStrings": [0, 1],
+    "commonFingeringNotes": "x-x-5-3(index)-2(middle)-3(ring) or movable"
+  },
+  {
+    "name": "Gsus2",
+    "startingFret": 0,
+    "fingering": ["3", "0", "0", "0", "0", "3"],
+    "openStrings": [1, 2, 3, 4],
+    "mutedStrings": [],
+    "commonFingeringNotes": "3-0-0-0-0-3 easy open"
+  }
+]

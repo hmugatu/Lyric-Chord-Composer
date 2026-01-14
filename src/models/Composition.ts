@@ -31,6 +31,15 @@ export interface GlobalSettings {
   tuning: GuitarTuning;
 }
 
+export interface PageData {
+  barLyrics: string[];
+  barBeatChords: string[][];
+}
+
+export interface CompositionPages {
+  pages: PageData[];
+}
+
 export interface Composition {
   id: string;
   title: string;
@@ -45,5 +54,5 @@ export interface Composition {
   // Metadata
   tags?: string[];
   difficulty?: "beginner" | "intermediate" | "advanced";
-  notes?: string;
+  notes?: string; // Stores JSON with pages structure { pages: PageData[] }
 }

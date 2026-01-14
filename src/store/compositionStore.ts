@@ -63,9 +63,34 @@ const createNewComposition = (title: string, artist?: string): Composition => ({
   artist,
   createdAt: new Date(),
   updatedAt: new Date(),
-  sections: [],
+  sections: [
+    {
+      id: `section-${Date.now()}-intro`,
+      type: 'intro',
+      label: 'Intro',
+      order: 0,
+      chordProgression: { chords: [] },
+    },
+    {
+      id: `section-${Date.now()}-verse1`,
+      type: 'verse',
+      label: 'Verse 1',
+      order: 1,
+      lyrics: { lines: [] },
+      chordProgression: { chords: [] },
+    },
+    {
+      id: `section-${Date.now()}-chorus`,
+      type: 'chorus',
+      label: 'Chorus',
+      order: 2,
+      lyrics: { lines: [] },
+      chordProgression: { chords: [] },
+    },
+  ],
   globalSettings: createDefaultGlobalSettings(),
   tags: [],
+  difficulty: 'beginner',
 });
 
 // Initialize services

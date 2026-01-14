@@ -1,0 +1,64 @@
+{
+  "id": "default-composition",
+  "title": "Untitled Song",
+  "createdAt": "2026-01-13T00:00:00Z",
+  "updatedAt": "2026-01-13T00:00:00Z",
+  "sections": [
+    {
+      "id": "section-default-intro",
+      "type": "intro",
+      "label": "Intro",
+      "order": 0,
+      "chordProgression": {
+        "chords": []
+      }
+    },
+    {
+      "id": "section-default-verse1",
+      "type": "verse",
+      "label": "Verse 1",
+      "order": 1,
+      "lyrics": {
+        "lines": []
+      },
+      "chordProgression": {
+        "chords": []
+      }
+    },
+    {
+      "id": "section-default-chorus",
+      "type": "chorus",
+      "label": "Chorus",
+      "order": 2,
+      "lyrics": {
+        "lines": []
+      },
+      "chordProgression": {
+        "chords": []
+      }
+    }
+  ],
+  "globalSettings": {
+    "key": "C",
+    "tempo": 120,
+    "timeSignature": {
+      "beats": 4,
+      "beatValue": 4
+    },
+    "capo": 0,
+    "tuning": {
+      "name": "Standard",
+      "notes": [
+        "E2",
+        "A2",
+        "D3",
+        "G3",
+        "B3",
+        "E4"
+      ]
+    }
+  },
+  "tags": [],
+  "difficulty": "beginner",
+  "notes": "{\"pages\":[{\"barLyrics\":[\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"\"],\"barBeatChords\":[[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"],[\"\",\"\",\"\",\"\"]]}]}"
+}

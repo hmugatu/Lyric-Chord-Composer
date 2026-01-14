@@ -21,16 +21,27 @@ export class LocalFileProvider implements StorageProvider {
     const finalFilename = filename.endsWith('.hmlcc') ? filename : `${filename}.hmlcc`;
 
     try {
-      // Create file in document directory
-      const fileUri = `${Paths.document.uri}/${finalFilename}`;
+      if (Platform.OS === 'web') {
+        // For web, use blob download
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = finalFilename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        // For mobile, use file system and sharing
+        const fileUri = `${Paths.document.uri}/${finalFilename}`;
 
-      // Write content to file
-      await FileSystem.writeAsStringAsync(fileUri, content, {
-        encoding: 'utf8' as any,
-      });
+        // Write content to file
+        await FileSystem.writeAsStringAsync(fileUri, content, {
+          encoding: 'utf8' as any,
+        });
 
-      // Share/save the file
-      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        // Share/save the file
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
           await Sharing.shareAsync(fileUri, {
@@ -41,9 +52,6 @@ export class LocalFileProvider implements StorageProvider {
         } else {
           throw new Error('Sharing is not available on this device');
         }
-      } else {
-        // For web, trigger download
-        await Sharing.shareAsync(fileUri);
       }
     } catch (error) {
       console.error('Export error:', error);
