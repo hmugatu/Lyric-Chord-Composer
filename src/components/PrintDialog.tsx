@@ -1,10 +1,11 @@
 /**
  * Print Options Dialog Component
  * Modal for selecting print options before printing/exporting PDF
+ * Improved UX with clear descriptions and better visual hierarchy
  */
 
 import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import { Dialog, Portal, Button, Checkbox, RadioButton, Text, Divider } from 'react-native-paper';
 import { PrintOptions } from '../services/printService';
 
@@ -12,14 +13,12 @@ export interface PrintDialogProps {
   visible: boolean;
   onDismiss: () => void;
   onPrint: (options: PrintOptions) => void;
-  onExportPdf: (options: PrintOptions) => void;
 }
 
 export const PrintDialog: React.FC<PrintDialogProps> = ({
   visible,
   onDismiss,
   onPrint,
-  onExportPdf,
 }) => {
   const [options, setOptions] = useState<PrintOptions>({
     includeChordDiagrams: true,
@@ -36,95 +35,125 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
     }));
   };
 
+  const countIncluded = [
+    options.includeChordDiagrams,
+    options.includeTablature,
+    options.includeNotation,
+  ].filter(Boolean).length;
+
   return (
     <Portal>
       <Dialog visible={visible} onDismiss={onDismiss} style={styles.dialog}>
-        <Dialog.Title style={styles.title}>Print Options</Dialog.Title>
+        <Dialog.Title style={styles.title}>Print Settings</Dialog.Title>
         <Dialog.Content>
-          {/* Content Options */}
-          <Text style={styles.sectionTitle}>Include in Print</Text>
-          <View style={styles.checkboxRow}>
-            <Checkbox
-              status={options.includeChordDiagrams ? 'checked' : 'unchecked'}
-              onPress={() => handleCheckboxChange('includeChordDiagrams')}
-            />
-            <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeChordDiagrams')}>
-              Chord Diagrams
-            </Text>
-          </View>
-          <View style={styles.checkboxRow}>
-            <Checkbox
-              status={options.includeTablature ? 'checked' : 'unchecked'}
-              onPress={() => handleCheckboxChange('includeTablature')}
-            />
-            <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeTablature')}>
-              Tablature
-            </Text>
-          </View>
-          <View style={styles.checkboxRow}>
-            <Checkbox
-              status={options.includeNotation ? 'checked' : 'unchecked'}
-              onPress={() => handleCheckboxChange('includeNotation')}
-            />
-            <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeNotation')}>
-              Staff Notation
-            </Text>
-          </View>
-
-          <Divider style={styles.divider} />
-
-          {/* Page Size */}
-          <Text style={styles.sectionTitle}>Page Size</Text>
-          <RadioButton.Group
-            onValueChange={value => setOptions(prev => ({ ...prev, pageSize: value as 'letter' | 'a4' }))}
-            value={options.pageSize}
-          >
-            <View style={styles.radioRow}>
-              <RadioButton value="letter" />
-              <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, pageSize: 'letter' }))}>
-                Letter (8.5" x 11")
+          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            {/* Content Options Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>📄 What to Include</Text>
+              <Text style={styles.sectionDescription}>
+                Select which elements to include ({countIncluded} of 3 selected)
               </Text>
+              <View style={styles.optionsGroup}>
+                <View style={styles.checkboxRow}>
+                  <Checkbox
+                    status={options.includeChordDiagrams ? 'checked' : 'unchecked'}
+                    onPress={() => handleCheckboxChange('includeChordDiagrams')}
+                    color="#6200ee"
+                  />
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeChordDiagrams')}>
+                      Chord Diagrams
+                    </Text>
+                    <Text style={styles.checkboxHelper}>Visual chord shapes and fingerings</Text>
+                  </View>
+                </View>
+                <View style={styles.checkboxRow}>
+                  <Checkbox
+                    status={options.includeTablature ? 'checked' : 'unchecked'}
+                    onPress={() => handleCheckboxChange('includeTablature')}
+                    color="#6200ee"
+                  />
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeTablature')}>
+                      Tablature
+                    </Text>
+                    <Text style={styles.checkboxHelper}>Guitar tab notation</Text>
+                  </View>
+                </View>
+                <View style={styles.checkboxRow}>
+                  <Checkbox
+                    status={options.includeNotation ? 'checked' : 'unchecked'}
+                    onPress={() => handleCheckboxChange('includeNotation')}
+                    color="#6200ee"
+                  />
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.checkboxLabel} onPress={() => handleCheckboxChange('includeNotation')}>
+                      Staff Notation
+                    </Text>
+                    <Text style={styles.checkboxHelper}>Standard music notation</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-            <View style={styles.radioRow}>
-              <RadioButton value="a4" />
-              <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, pageSize: 'a4' }))}>
-                A4 (210mm x 297mm)
-              </Text>
-            </View>
-          </RadioButton.Group>
 
-          <Divider style={styles.divider} />
+            <Divider style={styles.divider} />
 
-          {/* Orientation */}
-          <Text style={styles.sectionTitle}>Orientation</Text>
-          <RadioButton.Group
-            onValueChange={value => setOptions(prev => ({ ...prev, orientation: value as 'portrait' | 'landscape' }))}
-            value={options.orientation}
-          >
-            <View style={styles.radioRow}>
-              <RadioButton value="portrait" />
-              <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, orientation: 'portrait' }))}>
-                Portrait
-              </Text>
+            {/* Page Size Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>📏 Paper Size</Text>
+              <Text style={styles.sectionDescription}>Choose your paper size</Text>
+              <RadioButton.Group
+                onValueChange={value => setOptions(prev => ({ ...prev, pageSize: value as 'letter' | 'a4' }))}
+                value={options.pageSize}
+              >
+                <View style={styles.radioRow}>
+                  <RadioButton value="letter" color="#6200ee" />
+                  <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, pageSize: 'letter' }))}>
+                    Letter (8.5" × 11") - US Standard
+                  </Text>
+                </View>
+                <View style={styles.radioRow}>
+                  <RadioButton value="a4" color="#6200ee" />
+                  <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, pageSize: 'a4' }))}>
+                    A4 (210mm × 297mm) - International
+                  </Text>
+                </View>
+              </RadioButton.Group>
             </View>
-            <View style={styles.radioRow}>
-              <RadioButton value="landscape" />
-              <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, orientation: 'landscape' }))}>
-                Landscape
-              </Text>
+
+            <Divider style={styles.divider} />
+
+            {/* Orientation Section */}
+            <View style={styles.sectionContainer}>
+              <Text style={styles.sectionTitle}>🔄 Orientation</Text>
+              <Text style={styles.sectionDescription}>Choose page orientation</Text>
+              <RadioButton.Group
+                onValueChange={value => setOptions(prev => ({ ...prev, orientation: value as 'portrait' | 'landscape' }))}
+                value={options.orientation}
+              >
+                <View style={styles.radioRow}>
+                  <RadioButton value="portrait" color="#6200ee" />
+                  <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, orientation: 'portrait' }))}>
+                    Portrait (Taller)
+                  </Text>
+                </View>
+                <View style={styles.radioRow}>
+                  <RadioButton value="landscape" color="#6200ee" />
+                  <Text style={styles.radioLabel} onPress={() => setOptions(prev => ({ ...prev, orientation: 'landscape' }))}>
+                    Landscape (Wider)
+                  </Text>
+                </View>
+              </RadioButton.Group>
             </View>
-          </RadioButton.Group>
+          </ScrollView>
         </Dialog.Content>
 
         <Dialog.Actions style={styles.actions}>
-          <Button onPress={onDismiss} textColor="#666">
+          <Button onPress={onDismiss} style={styles.cancelButton}>
             Cancel
           </Button>
-          <Button onPress={() => onExportPdf(options)} mode="outlined" style={styles.exportButton}>
-            Export PDF
-          </Button>
-          <Button onPress={() => onPrint(options)} mode="contained">
-            Print
+          <Button onPress={() => onPrint(options)} mode="contained" style={styles.printButton}>
+            🖨️ Print
           </Button>
         </Dialog.Actions>
       </Dialog>
@@ -134,51 +163,93 @@ export const PrintDialog: React.FC<PrintDialogProps> = ({
 
 const styles = StyleSheet.create({
   dialog: {
-    maxWidth: 400,
+    maxWidth: 420,
     alignSelf: 'center',
+    backgroundColor: '#ffffff',
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  scrollContent: {
+    maxHeight: 400,
+  },
+  sectionContainer: {
+    marginVertical: 8,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 12,
-    marginBottom: 8,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  sectionDescription: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  optionsGroup: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#6200ee',
   },
   checkboxRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
+    alignItems: 'flex-start',
+    marginVertical: 10,
+    paddingHorizontal: 8,
   },
-  checkboxLabel: {
-    fontSize: 14,
-    color: '#333',
+  labelContainer: {
+    flex: 1,
     marginLeft: 8,
   },
-  disabledText: {
-    color: '#999',
+  checkboxLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 2,
+  },
+  checkboxHelper: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   radioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 2,
+    marginVertical: 10,
+    paddingHorizontal: 8,
   },
   radioLabel: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#1a1a1a',
+    marginLeft: 12,
+    flex: 1,
   },
   divider: {
-    marginVertical: 12,
+    marginVertical: 14,
+    backgroundColor: '#eeeeee',
   },
   actions: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingVertical: 16,
+    paddingTop: 20,
+    gap: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    backgroundColor: '#fafafa',
   },
-  exportButton: {
-    marginRight: 8,
+  cancelButton: {
+    minWidth: 80,
+  },
+  printButton: {
+    minWidth: 100,
   },
 });

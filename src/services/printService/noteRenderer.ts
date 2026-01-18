@@ -3,8 +3,8 @@
  * Derives notes from chord names and renders them on a musical staff
  */
 
-import { Chord } from '@tonaljs/chord';
-import { Note } from '@tonaljs/note';
+import Chord from '@tonaljs/chord';
+import Note from '@tonaljs/note';
 
 export interface StaffNote {
   pitch: string;      // e.g., "C4", "E4", "G4"
@@ -288,8 +288,8 @@ export function generateTablatureHtml(
     return displayFingering.map((fret, stringIndex) => {
       const y = stringSpacing * stringIndex + stringSpacing / 2 + 3;
       const displayValue = fret === 'x' ? 'x' : fret;
-      // White background for fret number
-      const bgRect = `<rect x="${beatX - 5}" y="${y - 8}" width="10" height="10" fill="#fff" />`;
+      // Transparent background for fret number - lines show through
+      const bgRect = `<rect x="${beatX - 5}" y="${y - 8}" width="10" height="10" fill="none" />`;
       const text = `<text x="${beatX}" y="${y}" font-size="8" font-family="monospace" font-weight="bold" fill="#000" text-anchor="middle">${displayValue}</text>`;
       return bgRect + text;
     }).join('');

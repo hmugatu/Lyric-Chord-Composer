@@ -460,13 +460,16 @@ export default function EditorScreen() {
 
   const handlePrint = async (options: PrintOptions) => {
     if (!currentComposition) {
-      Alert.alert('Error', 'No composition to print');
       return;
     }
 
     try {
-      setIsPrinting(true);
+      // Close the print dialog immediately
       setShowPrintDialog(false);
+      setIsPrinting(true);
+
+      // Add a small delay to ensure dialog closes before showing print dialog
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const result = await printService.print(currentComposition, chordsData, options);
 
@@ -475,30 +478,6 @@ export default function EditorScreen() {
       }
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Failed to print');
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
-  const handleExportPdf = async (options: PrintOptions) => {
-    if (!currentComposition) {
-      Alert.alert('Error', 'No composition to export');
-      return;
-    }
-
-    try {
-      setIsPrinting(true);
-      setShowPrintDialog(false);
-
-      const result = await printService.exportPdf(currentComposition, chordsData, options);
-
-      if (result.success) {
-        Alert.alert('Success', 'PDF exported successfully');
-      } else {
-        Alert.alert('Export Error', result.error || 'Failed to export PDF');
-      }
-    } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to export PDF');
     } finally {
       setIsPrinting(false);
     }
@@ -613,7 +592,7 @@ export default function EditorScreen() {
             {currentPage === 0 && (
               <View style={[styles.pageTitle, { width: CONTENT_WIDTH, marginHorizontal: PAPER_MARGIN }]}>
                 <RNTextInput
-                  style={styles.pageTitleInput}
+                  style={styles.titleInput}
                   value={currentComposition.title}
                   onChangeText={(text) => updateComposition({ title: text })}
                   placeholder="Untitled Song"
@@ -707,13 +686,11 @@ export default function EditorScreen() {
                         return (
                           <Tooltip
                             key={beatIndex}
-                            title={isHovered && chordData ? <View style={styles.tooltipChordDiagram}><View style={styles.tooltipChordContent}><MiniChordDiagram chord={chordData} /></View></View> : (!chordName ? "click to add chord" : undefined)}
+                            title={!chordName ? "click to add chord" : ""}
                           >
                             <TouchableOpacity
                               style={[styles.beatChordBox, { width: beatWidth }]}
                               onPress={() => openChordSelector(barIndex, beatIndex)}
-                              onMouseEnter={() => chordName && setHoveredChordName(chordName)}
-                              onMouseLeave={() => setHoveredChordName(null)}
                             >
                               <Text style={[styles.beatChordText, !chordName && styles.beatChordPlaceholder]}>
                                 {barBeatChords[barIndex][beatIndex] || '+'}
@@ -938,7 +915,6 @@ export default function EditorScreen() {
           visible={showPrintDialog}
           onDismiss={() => setShowPrintDialog(false)}
           onPrint={handlePrint}
-          onExportPdf={handleExportPdf}
         />
       </Portal>
     </View>
@@ -1450,7 +1426,7 @@ const styles = StyleSheet.create({
   },
   beatChordRow: {
     flexDirection: 'row',
-    justifyContent: 'stretch',
+    justifyContent: 'flex-start',
     alignItems: 'stretch',
     gap: 0,
     marginBottom: 0,

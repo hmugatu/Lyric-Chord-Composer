@@ -255,7 +255,7 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({ beatChords, width, heigh
           }
           
           // Create voice for this measure
-          const voice = new Voice({ num_beats: 4, beat_value: 4 });
+          const voice = new Voice({ numBeats: 4, beatValue: 4 });
           voice.addTickables(notes);
           voices.push(voice);
           

@@ -1,6 +1,6 @@
 [
   {
-    "name": "A major",
+    "name": "A",
     "startingFret": 0,
     "fingering": ["x", "0", "2", "2", "2", "0"],
     "openStrings": [1, 5],
@@ -8,7 +8,7 @@
     "commonFingeringNotes": "x-0-2-2-2-0 (often index mini-barre or fingers 2-3-4)"
   },
   {
-    "name": "A major (easy)",
+    "name": "A (easy)",
     "startingFret": 0,
     "fingering": ["x", "0", "2", "2", "1", "0"],
     "openStrings": [1, 5],
@@ -72,7 +72,7 @@
     "commonFingeringNotes": "x-0-2-2-3(pinky)-0 add pinky to B string"
   },
   {
-    "name": "B major",
+    "name": "B",
     "startingFret": 2,
     "fingering": ["x", "2", "4", "4", "4", "2"],
     "openStrings": [],
@@ -120,7 +120,7 @@
     "commonFingeringNotes": "x-2-3(index)-2(middle)-3(ring)-x (common half-diminished)"
   },
   {
-    "name": "C major",
+    "name": "C",
     "startingFret": 0,
     "fingering": ["x", "3", "2", "0", "1", "0"],
     "openStrings": [3, 5],
@@ -128,7 +128,7 @@
     "commonFingeringNotes": "x-3(ring)-2(middle)-0-1(index)-0"
   },
   {
-    "name": "C major (alt)",
+    "name": "C (alt)",
     "startingFret": 3,
     "fingering": ["x", "3", "5", "5", "5", "3"],
     "openStrings": [],
@@ -192,7 +192,7 @@
     "commonFingeringNotes": "x-3(ring)-3(pinky)-0-1(index)-1(index) or partial barre"
   },
   {
-    "name": "D major",
+    "name": "D",
     "startingFret": 0,
     "fingering": ["x", "x", "0", "2", "3", "2"],
     "openStrings": [2],
@@ -200,7 +200,7 @@
     "commonFingeringNotes": "x-x-0-2(index)-3(ring)-2(pinky/middle)"
   },
   {
-    "name": "D major (alt)",
+    "name": "D (alt)",
     "startingFret": 0,
     "fingering": ["x", "x", "0", "2", "3", "5"],
     "openStrings": [2],
@@ -256,7 +256,7 @@
     "commonFingeringNotes": "x-x-0-2(index)-3(ring)-3(pinky) common open"
   },
   {
-    "name": "E major",
+    "name": "E",
     "startingFret": 0,
     "fingering": ["0", "2", "2", "1", "0", "0"],
     "openStrings": [0, 4, 5],
@@ -304,7 +304,7 @@
     "commonFingeringNotes": "0-2-2-2(index on G)-0-0 (or ring on G)"
   },
   {
-    "name": "F major",
+    "name": "F",
     "startingFret": 1,
     "fingering": ["1", "3", "3", "2", "1", "1"],
     "openStrings": [],
@@ -312,7 +312,7 @@
     "commonFingeringNotes": "Full barre at 1st fret (index bars all)"
   },
   {
-    "name": "F major (easy)",
+    "name": "F (easy)",
     "startingFret": 1,
     "fingering": ["x", "x", "3", "2", "1", "1"],
     "openStrings": [],
@@ -336,7 +336,7 @@
     "commonFingeringNotes": "Barre at 1st fret (index bars all), similar to F7 but 4th replaces 3rd"
   },
   {
-    "name": "G major",
+    "name": "G",
     "startingFret": 0,
     "fingering": ["3", "2", "0", "0", "0", "3"],
     "openStrings": [2, 3, 4],
@@ -344,7 +344,7 @@
     "commonFingeringNotes": "3(ring/pinky)-2(index)-0-0-0-3(pinky/high e)"
   },
   {
-    "name": "G major (alt)",
+    "name": "G (alt)",
     "startingFret": 3,
     "fingering": ["3", "5", "5", "4", "3", "3"],
     "openStrings": [],

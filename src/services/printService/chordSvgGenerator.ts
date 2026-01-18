@@ -28,11 +28,11 @@ interface SvgDimensions {
 
 const DIMENSIONS: Record<ChordSize, SvgDimensions> = {
   small: {
-    width: 60,
-    height: 80,
+    width: 70,
+    height: 90,
     fretHeight: 10,
     stringSpacing: 8,
-    topPadding: 18,
+    topPadding: 24,
     sidePadding: 10,
     dotRadius: 3,
     fontSize: 9,

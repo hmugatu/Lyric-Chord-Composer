@@ -64,66 +64,9 @@ export function generatePrintHtml(
 
 /**
  * Generate print-specific CSS styles
- *
- * Layout calculations for Letter size (8.5" x 11") with 0.5" margins:
- * - Printable area: 7.5" wide x 10" tall
- * - Header: ~0.8" (title, artist, settings)
- * - Chord reference: ~1.0" (when present, reserved space even if empty)
- * - Page indicator: ~0.2"
- * - Remaining for 4 bar rows: ~8.0" / 4 = 2.0" per row
- * - Each bar row contains: lyrics (0.25"), chords (0.25"), optional measure/tablature
+ * Uses flexible, natural layout that matches the on-screen paper view
  */
 function generatePrintStyles(options: PrintOptions): string {
-  const pageSize = options.pageSize === 'a4' ? 'A4' : 'letter';
-  const orientation = options.orientation;
-
-  // Calculate dimensions based on page size
-  const isA4 = options.pageSize === 'a4';
-  const isLandscape = options.orientation === 'landscape';
-
-  // Base dimensions (in inches, converted to CSS)
-  // Letter: 8.5 x 11, A4: 8.27 x 11.69
-  const pageWidth = isA4 ? (isLandscape ? 11.69 : 8.27) : (isLandscape ? 11 : 8.5);
-  const pageHeight = isA4 ? (isLandscape ? 8.27 : 11.69) : (isLandscape ? 8.5 : 11);
-
-  // Printable area (subtract 0.5" margins on each side)
-  const printableWidth = pageWidth - 1; // 7.5" for letter portrait
-  const printableHeight = pageHeight - 1; // 10" for letter portrait
-
-  // Fixed heights for layout components
-  const headerHeight = 0.9; // inches - title, artist, settings with border
-  const chordRefHeight = options.includeChordDiagrams ? 1.1 : 0.1; // inches - chord diagrams section (minimal if not included)
-  const pageIndicatorHeight = 0.3; // inches
-
-  // Calculate remaining height for bar rows
-  const contentHeight = printableHeight - headerHeight - chordRefHeight - pageIndicatorHeight;
-  const barRowHeight = contentHeight / 4; // 4 rows per page
-
-  // Bar row component heights (adjust based on included elements)
-  const lyricsHeight = 0.25; // inches - always included
-  const chordRowHeight = 0.25; // inches - always included
-  let tablatureHeight = 0; // inches
-  let measureHeight = 0; // inches
-
-  // Dynamically calculate heights based on what's included
-  if (options.includeNotation && options.includeTablature) {
-    // Both: split remaining space
-    tablatureHeight = 0.4;
-    measureHeight = barRowHeight - lyricsHeight - chordRowHeight - tablatureHeight - 0.1;
-  } else if (options.includeNotation) {
-    // Only notation
-    tablatureHeight = 0;
-    measureHeight = barRowHeight - lyricsHeight - chordRowHeight - 0.1;
-  } else if (options.includeTablature) {
-    // Only tablature
-    tablatureHeight = barRowHeight - lyricsHeight - chordRowHeight - 0.1;
-    measureHeight = 0;
-  } else {
-    // Neither notation nor tablature
-    tablatureHeight = 0;
-    measureHeight = 0;
-  }
-
   return `
     * {
       margin: 0;
@@ -132,31 +75,26 @@ function generatePrintStyles(options: PrintOptions): string {
     }
 
     html, body {
-      font-family: 'Georgia', 'Times New Roman', serif;
+      font-family: Georgia, 'Times New Roman', serif;
       color: #333;
       background: white;
-      width: ${printableWidth}in;
-      height: ${printableHeight}in;
     }
 
     body {
       padding: 0.5in;
+      font-size: 11pt;
+      line-height: 1.5;
     }
 
     @media print {
       @page {
-        size: ${pageSize} ${orientation};
+        size: ${options.pageSize === 'a4' ? 'A4' : 'letter'} ${options.orientation};
         margin: 0.5in;
-      }
-
-      html, body {
-        width: 100%;
-        height: auto;
-        padding: 0;
       }
 
       .page-break {
         page-break-after: always;
+        margin-top: 0;
       }
 
       .no-print {
@@ -164,24 +102,24 @@ function generatePrintStyles(options: PrintOptions): string {
       }
     }
 
-    /* Header Styles - Fixed height: ${headerHeight}in */
+    /* Header Styles */
     .header {
-      height: ${headerHeight}in;
-      text-align: center;
-      padding-bottom: 0.1in;
       display: flex;
-      flex-direction: column;
-      justify-content: center;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.3in;
+      border-bottom: none;
+      padding-bottom: 0.15in;
     }
 
     .title {
-      font-size: 24pt;
+      font-size: 20pt;
       font-weight: bold;
-      line-height: 1.2;
+      line-height: 1.3;
     }
 
     .artist {
-      font-size: 14pt;
+      font-size: 12pt;
       font-style: italic;
       color: #666;
       margin-top: 0.05in;
@@ -189,33 +127,31 @@ function generatePrintStyles(options: PrintOptions): string {
 
     .settings {
       display: flex;
-      gap: 0.3in;
-      justify-content: center;
-      font-size: 10pt;
+      flex-direction: column;
+      gap: 4pt;
+      font-size: 8pt;
       color: #555;
-      margin-top: 0.1in;
+      text-align: right;
     }
 
     .settings span {
-      padding: 2px 8px;
-      background: #f0f0f0;
-      border-radius: 3px;
+      padding: 0;
+      background: transparent;
+      border: none;
     }
 
-    /* Chord Reference Section - Fixed height: ${chordRefHeight}in */
+    /* Chord Reference Section */
     .chord-reference {
-      height: ${chordRefHeight}in;
-      padding: 0.1in;
-      background: #fafafa;
-      margin-top: 0.1in;
-      overflow: hidden;
+      margin: 10pt 0 0 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      page-break-inside: avoid;
+      page-break-after: avoid;
     }
 
     .chord-reference-title {
-      font-size: 11pt;
-      font-weight: bold;
-      margin-bottom: 0.08in;
-      color: #333;
+      display: none;
     }
 
     .chord-diagrams {
@@ -224,46 +160,52 @@ function generatePrintStyles(options: PrintOptions): string {
       gap: 0.15in;
       justify-content: flex-start;
       align-items: flex-start;
+      margin-bottom: 10pt;
     }
 
     .chord-diagram-item {
-      display: inline-block;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
-    /* Chord Reference Placeholder - maintains spacing when no chords */
+    .chord-diagram-item svg {
+      display: block;
+      width: 60px;
+      height: auto;
+    }
+
     .chord-reference-placeholder {
-      height: ${chordRefHeight}in;
-      margin-top: 0.1in;
+      display: none;
     }
 
     /* Pages Container */
     .pages-container {
-      margin-top: 0.1in;
+      margin-top: 0.2in;
     }
 
-    /* Sheet Music Page - contains 4 bar rows */
+    /* Sheet Page - Natural flow, no fixed height */
     .sheet-page {
-      height: ${contentHeight + pageIndicatorHeight}in;
-      display: flex;
-      flex-direction: column;
+      margin-bottom: 0.3in;
+      page-break-inside: avoid;
     }
 
     .page-header {
-      height: ${pageIndicatorHeight}in;
-      font-size: 9pt;
-      color: #888;
+      font-size: 8pt;
+      color: #999;
       text-align: right;
-      line-height: ${pageIndicatorHeight}in;
+      margin-bottom: 0.1in;
     }
 
-    /* Bar Row (4 bars per row) - Fixed height: ${barRowHeight.toFixed(3)}in */
+    /* Bar Row - 4 bars across, natural height */
     .bar-row {
       display: flex;
-      height: ${barRowHeight}in;
-      gap: 0.1in;
+      gap: 4pt;
+      margin-bottom: 6pt;
+      page-break-inside: avoid;
     }
 
-    /* Individual Bar - equal width, fills row */
+    /* Individual Bar */
     .bar {
       flex: 1;
       display: flex;
@@ -271,88 +213,137 @@ function generatePrintStyles(options: PrintOptions): string {
       min-width: 0;
     }
 
-    /* Lyrics above bar - Fixed height: ${lyricsHeight}in */
+    /* Lyrics */
     .bar-lyrics {
-      height: ${lyricsHeight}in;
       font-size: 11pt;
       text-align: center;
-      line-height: ${lyricsHeight}in;
-      color: #333;
+      margin-bottom: 2pt;
+      min-height: 12pt;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      line-height: 1;
     }
 
-    /* Chord row within bar - Fixed height: ${chordRowHeight}in */
+    /* Chord Row */
     .chord-row {
-      height: ${chordRowHeight}in;
       display: flex;
+      gap: 1pt;
+      margin-bottom: 3pt;
       justify-content: space-between;
-      align-items: center;
-      gap: 2px;
+      min-height: 16pt;
     }
 
+    /* Chord Box */
     .chord-box {
       flex: 1;
-      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10pt;
+      font-size: 8pt;
       font-weight: bold;
       color: #000;
-      background: #fff;
+      background: transparent;
+      border: none;
+      padding: 2pt;
+      line-height: 1;
     }
 
     .chord-box.empty {
       visibility: hidden;
     }
 
-    /* Measure box (staff representation) - Fixed height: ${measureHeight.toFixed(3)}in */
+    /* Measure (Staff) */
     .measure {
       flex: 1;
-      height: ${measureHeight}in;
       position: relative;
       background: #fff;
+      border: none;
+      min-height: 45pt;
+      margin-bottom: 2pt;
+      page-break-inside: avoid;
     }
 
-    /* Staff lines inside measure */
+    /* Staff Lines */
     .staff-lines {
       position: absolute;
-      top: 15%;
+      top: 20%;
       left: 0;
       right: 0;
-      bottom: 10%;
+      height: 60%;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
 
     .staff-line {
-      height: 1px;
-      background: #999;
+      height: 0.5pt;
+      background: #333;
     }
 
-    /* Tablature section below staff */
+    /* Tablature */
     .tablature {
-      height: ${tablatureHeight > 0 ? tablatureHeight + 'in' : 'auto'};
       position: relative;
       background: #fff;
-      border-top: 1px solid #ddd;
-      margin-top: 2px;
-      ${tablatureHeight === 0 ? 'display: none;' : ''}
+      border: none;
+      min-height: 18pt;
+      padding: 1pt 2pt;
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      line-height: 1.1;
+      page-break-inside: avoid;
     }
 
-    /* Measure box should expand if tablature is not shown */
-    ${!options.includeTablature && options.includeNotation ? `.measure { height: ${barRowHeight - lyricsHeight - chordRowHeight - 0.1}in; }` : ''}
-
-    /* Empty bar styling */
+    /* Empty Bar Styling */
     .empty-bar .measure {
-      background: #fcfcfc;
+      background: #fff;
     }
 
     .empty-bar .tablature {
-      background: #fcfcfc;
+      background: #fff;
+    }
+
+    /* Row-spanning Containers */
+    .bars-container {
+      display: flex;
+      gap: 4pt;
+      flex: 1;
+    }
+
+    .row-tablature {
+      width: 100%;
+      background: #fff;
+      border: none;
+      min-height: 65pt;
+      padding: 2pt;
+      font-family: 'Courier New', monospace;
+      font-size: 7pt;
+      line-height: 1.1;
+      page-break-inside: avoid;
+      margin-bottom: 4pt;
+    }
+
+    .row-tablature svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .row-staff {
+      width: 100%;
+      background: #fff;
+      border: none;
+      min-height: 85pt;
+      padding: 2pt;
+      position: relative;
+      page-break-inside: avoid;
+      margin-top: 4pt;
+    }
+
+    .row-staff svg {
+      display: block;
+      width: 100%;
+      height: auto;
     }
   `;
 }
@@ -368,8 +359,10 @@ function generateHeaderHtml(composition: Composition): string {
 
   return `
     <div class="header">
-      <div class="title">${escapeHtml(composition.title)}</div>
-      ${composition.artist ? `<div class="artist">${escapeHtml(composition.artist)}</div>` : ''}
+      <div>
+        <div class="title">${escapeHtml(composition.title)}</div>
+        ${composition.artist ? `<div class="artist">${escapeHtml(composition.artist)}</div>` : ''}
+      </div>
       <div class="settings">
         <span>Key: ${escapeHtml(settings.key || 'C')}</span>
         <span>Tempo: ${settings.tempo || 120} BPM</span>
@@ -416,61 +409,64 @@ function generatePageHtml(
 
   // 4 rows of 4 bars each
   for (let rowIndex = 0; rowIndex < 4; rowIndex++) {
-    let rowHtml = '<div class="bar-row">';
+    // Collect all bar data for this row
+    const rowBarsData = [];
+    const rowBeatChords = [];
+    let rowHasContent = false;
 
     for (let colIndex = 0; colIndex < 4; colIndex++) {
       const barIndex = rowIndex * 4 + colIndex;
-      const barNumber = barIndex + 1;
       const lyrics = page.barLyrics[barIndex] || '';
       const beatChords = page.barBeatChords[barIndex] || ['', '', '', ''];
-
-      // Check if bar has any content
+      
       const hasChords = beatChords.some(c => c && c.trim() !== '');
       const hasLyrics = lyrics.trim() !== '';
       const isEmpty = !hasChords && !hasLyrics;
 
-      // Generate chord boxes - hide empty ones
-      const chordBoxesHtml = beatChords
+      rowBarsData.push({ lyrics, beatChords, hasChords, hasLyrics, isEmpty });
+      rowBeatChords.push(...beatChords);
+      
+      if (!isEmpty) rowHasContent = true;
+    }
+
+    // Generate row-spanning staff notation (once per row)
+    const notesSvg = options.includeNotation && rowHasContent ? generateNotesHtml(rowBeatChords, 800, 85) : '';
+
+    // Generate row-spanning tablature (once per row)
+    const tabSvg = options.includeTablature && rowHasContent ? generateTablatureHtml(rowBeatChords, chordsData, 800, 65) : '';
+
+    let rowHtml = `
+      <div class="bar-row">
+        ${options.includeTablature ? `<div class="row-tablature">${tabSvg}</div>` : ''}
+        <div class="bars-container">
+    `;
+
+    // Generate individual bars for this row
+    for (let colIndex = 0; colIndex < 4; colIndex++) {
+      const barData = rowBarsData[colIndex];
+      const barIndex = rowIndex * 4 + colIndex;
+
+      // Generate chord boxes - empty ones invisible, no borders
+      const chordBoxesHtml = barData.beatChords
         .map(chord => {
           const isEmpty = !chord || chord.trim() === '';
-          return `<div class="chord-box${isEmpty ? ' empty' : ''}">${isEmpty ? '-' : escapeHtml(chord)}</div>`;
+          return `<div class="chord-box${isEmpty ? ' empty' : ''}">${isEmpty ? '' : escapeHtml(chord)}</div>`;
         })
         .join('');
 
-      // Generate notes SVG for the staff (based on chords) - only if notation is included
-      const notesSvg = options.includeNotation && hasChords ? generateNotesHtml(beatChords, 150, 50) : '';
-
-      // Generate tablature SVG (based on chords and fingering data) - only if tablature is included
-      const tabSvg = options.includeTablature && hasChords ? generateTablatureHtml(beatChords, chordsData, 150, 35) : '';
-
-      // Build measure content with optional notation
-      let measureContent = '';
-      if (options.includeNotation) {
-        measureContent = `
-          <div class="staff-lines">
-            <div class="staff-line"></div>
-            <div class="staff-line"></div>
-            <div class="staff-line"></div>
-            <div class="staff-line"></div>
-            <div class="staff-line"></div>
-          </div>
-          ${notesSvg}
-        `;
-      }
-
       rowHtml += `
-        <div class="bar${isEmpty ? ' empty-bar' : ''}">
-          <div class="bar-lyrics">${escapeHtml(lyrics)}</div>
+        <div class="bar${barData.isEmpty ? ' empty-bar' : ''}">
+          <div class="bar-lyrics">${escapeHtml(barData.lyrics)}</div>
           <div class="chord-row">${chordBoxesHtml}</div>
-          <div class="measure">
-            ${measureContent}
-          </div>
-          ${options.includeTablature ? `<div class="tablature">${tabSvg}</div>` : ''}
         </div>
       `;
     }
 
-    rowHtml += '</div>';
+    rowHtml += `
+        </div>
+        ${options.includeNotation ? `<div class="row-staff">${notesSvg}</div>` : ''}
+      </div>
+    `;
     barsHtml.push(rowHtml);
   }
 

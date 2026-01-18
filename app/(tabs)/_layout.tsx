@@ -12,9 +12,6 @@ export default function TabLayout() {
         headerTintColor: '#fff',
         headerShown: true,
       }}
-      sceneContainerStyle={{
-        backgroundColor: '#fff',
-      }}
       initialRouteName="index"
     >
       <Tabs.Screen
