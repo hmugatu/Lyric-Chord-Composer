@@ -1,3 +1,15 @@
 {
-    "svg.preview.background": "white"
+    "svg.preview.background": "white",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell"
+        }
+    },
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.shellArgs.windows": [
+        "-NoExit",
+        "-Command",
+        ". $env:USERPROFILE\\.vscode\\extensions\\profile.ps1 2>/dev/null; . .vscode\\skills.ps1 2>/dev/null"
+    ]
 }

@@ -200,38 +200,40 @@ function generatePrintStyles(options: PrintOptions): string {
     /* Bar Row - 4 bars across, natural height */
     .bar-row {
       display: flex;
-      gap: 4pt;
-      margin-bottom: 6pt;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 2pt;
       page-break-inside: avoid;
     }
 
     /* Individual Bar */
     .bar {
       flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
-      min-width: 0;
+      min-height: 40pt;
     }
 
     /* Lyrics */
     .bar-lyrics {
       font-size: 11pt;
       text-align: center;
-      margin-bottom: 2pt;
+      margin-bottom: 1pt;
       min-height: 12pt;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      line-height: 1;
+      line-height: 1.1;
     }
 
     /* Chord Row */
     .chord-row {
       display: flex;
       gap: 1pt;
-      margin-bottom: 3pt;
+      margin-bottom: 2pt;
       justify-content: space-between;
-      min-height: 16pt;
+      min-height: 14pt;
     }
 
     /* Chord Box */
@@ -306,21 +308,22 @@ function generatePrintStyles(options: PrintOptions): string {
     /* Row-spanning Containers */
     .bars-container {
       display: flex;
+      flex-direction: row;
       gap: 4pt;
-      flex: 1;
+      width: 100%;
     }
 
     .row-tablature {
       width: 100%;
       background: #fff;
       border: none;
-      min-height: 65pt;
-      padding: 2pt;
+      min-height: 55pt;
+      padding: 2pt 0;
       font-family: 'Courier New', monospace;
       font-size: 7pt;
       line-height: 1.1;
       page-break-inside: avoid;
-      margin-bottom: 4pt;
+      margin-bottom: 0;
     }
 
     .row-tablature svg {
@@ -333,17 +336,35 @@ function generatePrintStyles(options: PrintOptions): string {
       width: 100%;
       background: #fff;
       border: none;
-      min-height: 85pt;
-      padding: 2pt;
+      min-height: 70pt;
+      padding: 2pt 0;
       position: relative;
       page-break-inside: avoid;
-      margin-top: 4pt;
+      margin-top: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
 
     .row-staff svg {
       display: block;
       width: 100%;
-      height: auto;
+      height: 100%;
+    }
+
+    .staff-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .staff-background svg {
+      width: 100%;
+      height: 100%;
     }
   `;
 }
@@ -396,6 +417,25 @@ function generateChordReferenceHtml(chords: ChordData[]): string {
 }
 
 /**
+ * Generate staff lines SVG background
+ */
+function generateStaffLinesSvg(width: number, height: number): string {
+  const lineCount = 5;
+  const lineSpacing = height / (lineCount - 1);
+  
+  const lines = Array.from({ length: lineCount }).map((_, index) => {
+    const y = index * lineSpacing;
+    return `<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#333" stroke-width="0.5" vector-effect="non-scaling-stroke" />`;
+  }).join('');
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+      ${lines}
+    </svg>
+  `;
+}
+
+/**
  * Generate HTML for a single page (16 bars)
  */
 function generatePageHtml(
@@ -430,10 +470,12 @@ function generatePageHtml(
     }
 
     // Generate row-spanning staff notation (once per row)
-    const notesSvg = options.includeNotation && rowHasContent ? generateNotesHtml(rowBeatChords, 800, 85) : '';
+    // Always generate to show structure even for empty bars
+    const notesSvg = options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70) : '';
 
     // Generate row-spanning tablature (once per row)
-    const tabSvg = options.includeTablature && rowHasContent ? generateTablatureHtml(rowBeatChords, chordsData, 800, 65) : '';
+    // Always generate to show structure even for empty bars
+    const tabSvg = options.includeTablature ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55) : '';
 
     let rowHtml = `
       <div class="bar-row">
@@ -464,7 +506,7 @@ function generatePageHtml(
 
     rowHtml += `
         </div>
-        ${options.includeNotation ? `<div class="row-staff">${notesSvg}</div>` : ''}
+        ${options.includeNotation ? `<div class="row-staff"><div class="staff-background">${generateStaffLinesSvg(800, 70)}</div>${notesSvg}</div>` : ''}
       </div>
     `;
     barsHtml.push(rowHtml);

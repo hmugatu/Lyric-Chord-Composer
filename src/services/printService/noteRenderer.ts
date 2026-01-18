@@ -225,7 +225,7 @@ export function generateNotesHtml(
   if (!notesHtml) return '';
 
   return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${measureWidth} ${staffHeight}" preserveAspectRatio="xMidYMid meet" style="position: absolute; top: 15%; left: 0; right: 0; bottom: 10%;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${measureWidth} ${staffHeight}" preserveAspectRatio="xMidYMid meet" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10;">
       ${notesHtml}
     </svg>
   `;
@@ -248,9 +248,8 @@ export function generateTablatureHtml(
   measureWidth: number,
   tabHeight: number
 ): string {
-  // Check if there are any chords
+  // Check if there are any chords - fret numbers are conditional
   const hasChords = beatChords.some(c => c && c.trim() !== '' && c !== '-');
-  if (!hasChords) return '';
 
   const beatWidth = measureWidth / 4;
   const stringSpacing = tabHeight / 6;
@@ -272,8 +271,8 @@ export function generateTablatureHtml(
     return `<text x="2" y="${y}" font-size="7" font-family="monospace" font-weight="bold" fill="#666">${label}</text>`;
   }).join('');
 
-  // Generate fret numbers for each beat
-  const fretNumbers = beatChords.map((chordName, beatIndex) => {
+  // Generate fret numbers for each beat (only if chords exist)
+  const fretNumbers = hasChords ? (beatChords.map((chordName, beatIndex) => {
     if (!chordName || chordName.trim() === '' || chordName === '-') return '';
 
     const chord = chordsData.find(c => c.name === chordName);
@@ -293,7 +292,7 @@ export function generateTablatureHtml(
       const text = `<text x="${beatX}" y="${y}" font-size="8" font-family="monospace" font-weight="bold" fill="#000" text-anchor="middle">${displayValue}</text>`;
       return bgRect + text;
     }).join('');
-  }).join('');
+  }).join('')) : '';
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${tabHeight}" viewBox="0 0 ${measureWidth} ${tabHeight}" preserveAspectRatio="xMidYMid meet" style="margin-top: 2px;">
