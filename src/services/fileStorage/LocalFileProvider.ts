@@ -64,8 +64,12 @@ export class LocalFileProvider implements StorageProvider {
    */
   async importFile(): Promise<ImportResult> {
     try {
+      if (Platform.OS === 'web') {
+        return await this.importFileWeb();
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/x-hmlcc', 'text/plain', '*/*'], // Accept .hmlcc or any text file
+        type: '*/*', // Show all files, we validate .hmlcc extension after selection
         copyToCacheDirectory: true,
       });
 
@@ -103,12 +107,54 @@ export class LocalFileProvider implements StorageProvider {
   }
 
   /**
+   * Web-specific import using native file input with .hmlcc filter
+   */
+  private importFileWeb(): Promise<ImportResult> {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.hmlcc';
+
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) {
+          reject(new Error('File selection was cancelled'));
+          return;
+        }
+
+        if (!file.name.endsWith('.hmlcc')) {
+          reject(new Error('Invalid file type. Please select a .hmlcc file'));
+          return;
+        }
+
+        try {
+          const content = await file.text();
+          JSON.parse(content); // Validate JSON
+          resolve({ filename: file.name, content });
+        } catch {
+          reject(new Error('Invalid file format. The file does not contain valid JSON'));
+        }
+      };
+
+      input.oncancel = () => {
+        reject(new Error('File selection was cancelled'));
+      };
+
+      input.click();
+    });
+  }
+
+  /**
    * Import multiple files
    */
   async importMultipleFiles(): Promise<ImportResult[]> {
     try {
+      if (Platform.OS === 'web') {
+        return await this.importMultipleFilesWeb();
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/x-hmlcc', 'text/plain', '*/*'],
+        type: '*/*', // Show all files, we validate .hmlcc extension after selection
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -151,6 +197,56 @@ export class LocalFileProvider implements StorageProvider {
       console.error('Import multiple error:', error);
       throw new Error(`Failed to import files: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Web-specific multiple file import using native file input with .hmlcc filter
+   */
+  private importMultipleFilesWeb(): Promise<ImportResult[]> {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.hmlcc';
+      input.multiple = true;
+
+      input.onchange = async (e) => {
+        const files = (e.target as HTMLInputElement).files;
+        if (!files || files.length === 0) {
+          reject(new Error('File selection was cancelled'));
+          return;
+        }
+
+        const imports: ImportResult[] = [];
+
+        for (const file of Array.from(files)) {
+          if (!file.name.endsWith('.hmlcc')) {
+            console.warn(`Skipping ${file.name}: not a .hmlcc file`);
+            continue;
+          }
+
+          try {
+            const content = await file.text();
+            JSON.parse(content); // Validate JSON
+            imports.push({ filename: file.name, content });
+          } catch {
+            console.warn(`Skipping ${file.name}: invalid JSON content`);
+          }
+        }
+
+        if (imports.length === 0) {
+          reject(new Error('No valid .hmlcc files were imported'));
+          return;
+        }
+
+        resolve(imports);
+      };
+
+      input.oncancel = () => {
+        reject(new Error('File selection was cancelled'));
+      };
+
+      input.click();
+    });
   }
 
   // StorageProvider interface implementation

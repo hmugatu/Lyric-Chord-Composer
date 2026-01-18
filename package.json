@@ -20,6 +20,7 @@
     "expo": "~54.0.31",
     "expo-document-picker": "^14.0.8",
     "expo-file-system": "^19.0.21",
+    "expo-print": "~15.0.8",
     "expo-router": "~6.0.21",
     "expo-secure-store": "^13.0.1",
     "expo-sharing": "^14.0.8",

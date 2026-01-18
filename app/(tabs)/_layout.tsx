@@ -36,7 +36,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="pencil-ruler" size={size} color={color} />
           ),
-          headerTitle: 'Composition Editor',
+          headerTitle: 'Lyric Chord Composition Editor',
         }}
       />
     </Tabs>

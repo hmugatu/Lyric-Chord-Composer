@@ -5,6 +5,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCompositionStore } from '../../src/store/compositionStore';
 import { CompositionStorageService } from '../../src/services/compositionService';
 import { CompositionSyncManager } from '../../src/services/compositionSyncManager';
+import { PrintService, PrintOptions } from '../../src/services/printService';
+import { PrintDialog } from '../../src/components/PrintDialog';
+import { StaffNotes } from '../../src/components/StaffNotes';
+import { Tablature } from '../../src/components/Tablature';
 import chordsDataJson from '../../chords/chords.json';
 
 type EditorView = 'chords' | 'tabs' | 'notation' | 'lyrics';
@@ -158,7 +162,9 @@ const ChordDiagram: React.FC<{ chord: ChordData }> = ({ chord }) => {
 
 export default function EditorScreen() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [tempo, setTempo] = useState('');
   const [key, setKey] = useState('');
   const [capo, setCapo] = useState('');
@@ -174,9 +180,18 @@ export default function EditorScreen() {
   const [tooltipVisible, setTooltipVisible] = useState<{[key: number]: boolean}>({});
   const [showChordModal, setShowChordModal] = useState(false);
 
-  // Calculate responsive chord margin based on screen width
-  const screenWidth = Dimensions.get('window').width;
-  const responsiveChordMargin = Math.max(8, Math.min(30, screenWidth * 0.05)); // Between 8px and 30px
+  // Fixed paper dimensions: 1000px = 8.5", 1100px = 11" (100px per inch)
+  const PAPER_WIDTH = 1000;
+  const PAPER_HEIGHT = 1100;
+  const PAPER_MARGIN = 50; // 0.5" margins
+  const CONTENT_WIDTH = PAPER_WIDTH - (PAPER_MARGIN * 2); // 900px usable width
+
+  // Calculate measure widths matching StaffNotes/Tablature layout
+  const BAR_GAP = 0;
+  const responsiveChordMargin = 4; // Fixed small margin for chord boxes
+  const totalMeasureWidth = CONTENT_WIDTH - 20;
+  const firstMeasureWidth = totalMeasureWidth / 4 + 40; // Extra space for clef/time signature
+  const otherMeasureWidth = (totalMeasureWidth - firstMeasureWidth) / 3;
 
   // Current page data (for backward compatibility with existing code)
   const barLyrics = allPages[currentPage]?.barLyrics || Array(16).fill('');
@@ -207,6 +222,7 @@ export default function EditorScreen() {
   const compositions = useCompositionStore((state) => state.compositions);
   const storageService = new CompositionStorageService();
   const syncManager = new CompositionSyncManager();
+  const printService = new PrintService();
 
   // Load chords from JSON file
   React.useEffect(() => {
@@ -442,6 +458,52 @@ export default function EditorScreen() {
     }
   };
 
+  const handlePrint = async (options: PrintOptions) => {
+    if (!currentComposition) {
+      Alert.alert('Error', 'No composition to print');
+      return;
+    }
+
+    try {
+      setIsPrinting(true);
+      setShowPrintDialog(false);
+
+      const result = await printService.print(currentComposition, chordsData, options);
+
+      if (!result.success) {
+        Alert.alert('Print Error', result.error || 'Failed to print');
+      }
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to print');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  const handleExportPdf = async (options: PrintOptions) => {
+    if (!currentComposition) {
+      Alert.alert('Error', 'No composition to export');
+      return;
+    }
+
+    try {
+      setIsPrinting(true);
+      setShowPrintDialog(false);
+
+      const result = await printService.exportPdf(currentComposition, chordsData, options);
+
+      if (result.success) {
+        Alert.alert('Success', 'PDF exported successfully');
+      } else {
+        Alert.alert('Export Error', result.error || 'Failed to export PDF');
+      }
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to export PDF');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
   if (!currentComposition) {
     return (
       <View style={styles.container}>
@@ -470,6 +532,13 @@ export default function EditorScreen() {
             placeholderTextColor="#999"
           />
           <View style={styles.headerButtons}>
+            <IconButton
+              icon="printer"
+              size={24}
+              onPress={() => setShowPrintDialog(true)}
+              disabled={isPrinting}
+              iconColor="#333"
+            />
             <IconButton
               icon="cog"
               size={24}
@@ -501,22 +570,6 @@ export default function EditorScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Global Settings Bar */}
-        <View style={styles.settingsBar}>
-          <View style={styles.settingsItem}>
-            <Text style={styles.settingLabel}>Key: </Text>
-            <Text style={styles.settingValue}>{currentComposition.globalSettings.key}</Text>
-          </View>
-          <View style={styles.settingsItem}>
-            <Text style={styles.settingLabel}>Tempo: </Text>
-            <Text style={styles.settingValue}>♩ = {currentComposition.globalSettings.tempo}</Text>
-          </View>
-          <View style={styles.settingsItem}>
-            <Text style={styles.settingLabel}>Capo: </Text>
-            <Text style={styles.settingValue}>{currentComposition.globalSettings.capo || 'None'}</Text>
-          </View>
-        </View>
-
         {/* Page Navigation */}
         <View style={styles.pageNavContainer}>
           <Button
@@ -553,105 +606,158 @@ export default function EditorScreen() {
           </Button>
         </View>
 
-        {/* Chord Reference Section - Show unique chords (only on first page) */}
-        {currentPage === 0 && (() => {
-          // Get all unique chords used across ALL pages in the composition
-          const usedChordNames = new Set<string>();
-          allPages.forEach(page => {
-            page.barBeatChords.forEach(bar => {
-              bar.forEach(chord => {
-                if (chord) usedChordNames.add(chord);
-              });
-            });
-          });
-
-          const uniqueChords = Array.from(usedChordNames)
-            .map(name => chordsData.find(c => c.name === name))
-            .filter(chord => chord !== undefined) as ChordData[];
-
-          if (uniqueChords.length === 0) return null;
-
-          return (
-            <View style={styles.chordReferenceSection}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chordReferenceScroll}>
-                {uniqueChords.map((chord, index) => (
-                  <View key={index} style={styles.miniChordDiagramWrapper}>
-                    <MiniChordDiagram chord={chord} />
+        {/* 16 Bars Sheet Music Layout (4 rows x 4 bars) - Paper sized */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={true} contentContainerStyle={styles.paperScrollContainer}>
+          <View style={[styles.paperContainer, { width: PAPER_WIDTH, minHeight: PAPER_HEIGHT }]}>
+            {/* Title and settings at top of page (only on first page) */}
+            {currentPage === 0 && (
+              <View style={[styles.pageTitle, { width: CONTENT_WIDTH, marginHorizontal: PAPER_MARGIN }]}>
+                <RNTextInput
+                  style={styles.pageTitleInput}
+                  value={currentComposition.title}
+                  onChangeText={(text) => updateComposition({ title: text })}
+                  placeholder="Untitled Song"
+                  placeholderTextColor="#999"
+                />
+                <View style={styles.pageTitleSettings}>
+                  <View style={styles.settingsItem}>
+                    <Text style={styles.settingLabel}>Key: </Text>
+                    <Text style={styles.settingValue}>{currentComposition.globalSettings.key}</Text>
                   </View>
-                ))}
-              </ScrollView>
-            </View>
-          );
-        })()}
+                  <View style={styles.settingsItem}>
+                    <Text style={styles.settingLabel}>Tempo: </Text>
+                    <Text style={styles.settingValue}>♩ = {currentComposition.globalSettings.tempo}</Text>
+                  </View>
+                  <View style={styles.settingsItem}>
+                    <Text style={styles.settingLabel}>Capo: </Text>
+                    <Text style={styles.settingValue}>{currentComposition.globalSettings.capo || 'None'}</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+            {/* Chord Reference Section - Show unique chords at top of page */}
+            {currentPage === 0 && (() => {
+              // Get all unique chords used across ALL pages in the composition
+              const usedChordNames = new Set<string>();
+              allPages.forEach(page => {
+                page.barBeatChords.forEach(bar => {
+                  bar.forEach(chord => {
+                    if (chord) usedChordNames.add(chord);
+                  });
+                });
+              });
 
-        {/* 16 Bars Sheet Music Layout (4 rows x 4 bars) */}
-        <View style={styles.sheetMusicContainer}>
-          {[0, 1, 2, 3].map((rowIndex) => (
-            <View key={rowIndex} style={styles.barRow}>
-              {[0, 1, 2, 3].map((colIndex) => {
-                const barNumber = rowIndex * 4 + colIndex + 1;
-                const barIndex = barNumber - 1;
+              const uniqueChords = Array.from(usedChordNames)
+                .map(name => chordsData.find(c => c.name === name))
+                .filter(chord => chord !== undefined) as ChordData[];
+
+              if (uniqueChords.length === 0) return null;
+
+              return (
+                <View style={styles.chordReferenceSection}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chordReferenceScroll}>
+                    {uniqueChords.map((chord, index) => (
+                      <View key={index} style={styles.miniChordDiagramWrapper}>
+                        <MiniChordDiagram chord={chord} />
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              );
+            })()}
+            <View style={[styles.sheetMusicContainer, { width: CONTENT_WIDTH, marginHorizontal: PAPER_MARGIN }]}>
+              {[0, 1, 2, 3].map((rowIndex) => {
+                // Get all 4 bars worth of chords for this row
+                const rowBeatChords = [0, 1, 2, 3].map(colIndex => {
+                  const barIndex = rowIndex * 4 + colIndex;
+                  return barBeatChords[barIndex] || ['', '', '', ''];
+                }).flat();
+
                 return (
-                  <View key={barNumber} style={styles.barContainer}>
-                    {/* Editable Lyrics Text Box */}
-                    <Tooltip 
-                      title="click here to add lyrics!"
-                    >
-                      <RNTextInput
-                        style={styles.lyricsInput}
-                        value={barLyrics[barIndex]}
-                        onChangeText={(text) => handleLyricsChange(barIndex, text)}
-                        onFocus={() => setTooltipVisible({})}
-                        placeholder=""
-                        placeholderTextColor="#999"
-                        multiline={false}
-                      />
-                    </Tooltip>
-                    
+                <View key={rowIndex}>
+                  {/* Lyrics for entire row */}
+                  <Tooltip title="click here to add lyrics!">
+                    <RNTextInput
+                      style={[styles.lyricsInput, { width: CONTENT_WIDTH }]}
+                      value={barLyrics[rowIndex * 4] || ''}
+                      onChangeText={(text) => handleLyricsChange(rowIndex * 4, text)}
+                      onFocus={() => setTooltipVisible({})}
+                      placeholder=""
+                      placeholderTextColor="#999"
+                      multiline={false}
+                    />
+                  </Tooltip>
+                  
+                  {/* Chord Boxes Row */}
+                  <View style={[styles.barRow, { gap: BAR_GAP, marginLeft: 10 }]}>
+                  {[0, 1, 2, 3].map((colIndex) => {
+                    const barNumber = rowIndex * 4 + colIndex + 1;
+                    const barIndex = barNumber - 1;
+                    const barWidth = colIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
+                    return (
+                      <View key={barNumber} style={[styles.barContainer, { width: barWidth }]}>
                     {/* Chord Boxes for Each Beat */}
                     <View style={styles.beatChordRow}>
                       {[0, 1, 2, 3].map((beatIndex) => {
                         const chordName = barBeatChords[barIndex][beatIndex];
                         const chordData = chordName ? chordsData.find(c => c.name === chordName) : null;
                         const isHovered = hoveredChordName === chordName && chordName;
-                        
+                        const beatWidth = barWidth / 4;
+
                         return (
-                          <Tooltip 
+                          <Tooltip
                             key={beatIndex}
-                            title={isHovered && chordData ? <View style={styles.tooltipChordDiagram}><View style={styles.tooltipChordContent}><MiniChordDiagram chord={chordData} /></View></View> : (!chordName ? "click to select chord!" : undefined)}
+                            title={isHovered && chordData ? <View style={styles.tooltipChordDiagram}><View style={styles.tooltipChordContent}><MiniChordDiagram chord={chordData} /></View></View> : (!chordName ? "click to add chord" : undefined)}
                           >
                             <TouchableOpacity
-                              style={[styles.beatChordBox, { marginHorizontal: responsiveChordMargin }]}
+                              style={[styles.beatChordBox, { width: beatWidth }]}
                               onPress={() => openChordSelector(barIndex, beatIndex)}
                               onMouseEnter={() => chordName && setHoveredChordName(chordName)}
                               onMouseLeave={() => setHoveredChordName(null)}
                             >
-                              <Text style={styles.beatChordText}>
-                                {barBeatChords[barIndex][beatIndex] || '-'}
+                              <Text style={[styles.beatChordText, !chordName && styles.beatChordPlaceholder]}>
+                                {barBeatChords[barIndex][beatIndex] || '+'}
                               </Text>
                             </TouchableOpacity>
                           </Tooltip>
                         );
                       })}
                     </View>
-                    
-                    {/* Bar/Measure */}
-                    <View style={styles.measureBox}>
-                      <Text style={styles.barNumber}>{barNumber}</Text>
-                      
-                      {/* Staff Lines */}
-                      <View style={styles.staffLines}>
-                        {[0, 1, 2, 3, 4].map((lineIndex) => (
-                          <View key={lineIndex} style={styles.staffLine} />
-                        ))}
-                      </View>
-                    </View>
                   </View>
                 );
               })}
             </View>
-          ))}
-        </View>
+
+            {/* Tablature spanning all 4 bars */}
+            <View style={styles.tablatureBox}>
+              <Tablature
+                beatChords={rowBeatChords}
+                chordsData={chordsData}
+                width={CONTENT_WIDTH}
+                height={65}
+                numMeasures={4}
+              />
+            </View>
+
+            {/* Padding between tablature and staff */}
+            <View style={styles.staffTabPadding} />
+            
+            {/* Staff with 4 measures */}
+            <View style={styles.measureBox}>
+              <StaffNotes
+                beatChords={rowBeatChords}
+                width={CONTENT_WIDTH}
+                height={85}
+                numMeasures={4}
+              />
+            </View>
+          </View>
+                );
+              })}
+            </View>
+          </View>
+
+        </ScrollView>
       </ScrollView>
 
       <Portal>
@@ -826,6 +932,14 @@ export default function EditorScreen() {
             <Button mode="contained" onPress={handleSettingsSave}>Save</Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* Print Dialog */}
+        <PrintDialog
+          visible={showPrintDialog}
+          onDismiss={() => setShowPrintDialog(false)}
+          onPrint={handlePrint}
+          onExportPdf={handleExportPdf}
+        />
       </Portal>
     </View>
   );
@@ -923,6 +1037,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: 'transparent',
+  },
+  pageTitle: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pageTitleText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  pageTitleSettings: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   chordReferenceTitle: {
     fontSize: 12,
@@ -1056,28 +1188,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 4,
   },
-  sheetMusicContainer: {
+  paperScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 16,
+  },
+  paperContainer: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ccc',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignSelf: 'center',
+    marginVertical: 16,
+  },
+  sheetMusicContainer: {
     paddingVertical: 24,
   },
   barRow: {
     flexDirection: 'row',
-    marginBottom: 40,
-    justifyContent: 'space-between',
+    marginBottom: 5,
+    justifyContent: 'flex-start',
   },
   barContainer: {
-    flex: 1,
-    marginHorizontal: 0,
+    // width set dynamically via style prop
   },
   lyricsInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
     borderRadius: 0,
-    padding: 6,
-    marginBottom: 4,
-    minHeight: 30,
-    fontSize: 11,
-    textAlign: 'center',
+    padding: 0,
+    marginBottom: 2,
+    minHeight: 20,
+    fontSize: 10,
+    textAlign: 'left',
     color: '#333',
   },
   chordBox: {
@@ -1109,13 +1257,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   measureBox: {
-    borderWidth: 2,
-    borderColor: '#000',
     borderRadius: 0,
-    padding: 8,
+    padding: 4,
     backgroundColor: '#fff',
-    minHeight: 80,
+    minHeight: 160,
+    height: 160,
     position: 'relative',
+    overflow: 'hidden',
+  },
+  tablatureBox: {
+    borderRadius: 0,
+    padding: 4,
+    backgroundColor: '#fff',
+    position: 'relative',
+    overflow: 'hidden',
   },
   barNumber: {
     position: 'absolute',
@@ -1126,14 +1281,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   staffLines: {
-    marginTop: 16,
-    height: 40,
+    marginTop: 0,
+    height: 50,
     justifyContent: 'space-between',
   },
   staffLine: {
     height: 1,
     backgroundColor: '#333',
     width: '100%',
+  },
+  staffTabPadding: {
+    height: 2,
   },
   chordInput: {
     position: 'absolute',
@@ -1153,7 +1311,6 @@ const styles = StyleSheet.create({
   },
   chordSymbol: {
     position: 'absolute',
-    top: 24,
     left: '50%',
     transform: [{ translateX: -15 }],
     backgroundColor: '#fff',
@@ -1165,9 +1322,9 @@ const styles = StyleSheet.create({
     color: '#000',
   },
   sectionsContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 5,
+    paddingTop: 5,
+    paddingBottom: 5,
   },
   sheetSection: {
     marginBottom: 32,
@@ -1293,20 +1450,15 @@ const styles = StyleSheet.create({
   },
   beatChordRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    justifyContent: 'stretch',
+    alignItems: 'stretch',
+    gap: 0,
+    marginBottom: 0,
+    flex: 1,
   },
   beatChordBox: {
-    flex: 1,
+    height: 24,
     backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    minHeight: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1315,6 +1467,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#000',
     textAlign: 'center',
+  },
+  beatChordPlaceholder: {
+    color: '#ccc',
+    fontWeight: 'normal',
   },
   tooltipChordDiagram: {
     width: 50,
