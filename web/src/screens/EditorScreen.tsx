@@ -2,12 +2,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, IconButton, Tooltip, Typography, TextField, Dialog, DialogTitle,
-  DialogContent, DialogActions, InputAdornment, Snackbar,
+  DialogContent, DialogContentText, DialogActions, InputAdornment, Snackbar,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import { useCompositionStore } from '../store/compositionStore';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService, PrintOptions } from '../services/printService';
@@ -55,6 +56,7 @@ export const EditorScreen: React.FC = () => {
   const [showSettingsDialog, setShowSettingsDialog] = React.useState(false);
   const [showPrintDialog, setShowPrintDialog] = React.useState(false);
   const [showChordModal, setShowChordModal] = React.useState(false);
+  const [showNewDialog, setShowNewDialog] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isPrinting, setIsPrinting] = React.useState(false);
   const [snackbar, setSnackbar] = React.useState({ open: false, message: '' });
@@ -169,8 +171,34 @@ export const EditorScreen: React.FC = () => {
     c.toLowerCase().includes(chordSearchText.toLowerCase())
   );
 
-  const handleCreateNew = () => {
+  // Actually spin up a fresh blank composition and reset the editor to page 1.
+  const startNewComposition = () => {
     createComposition(`New Composition ${compositions.length + 1}`);
+    setAllPages([emptyPage()]);
+    setCurrentPage(0);
+    saveToCache();
+  };
+
+  // Entry point for the "New" button. If a composition is open, prompt first.
+  const handleCreateNew = () => {
+    if (currentComposition) {
+      setShowNewDialog(true);
+    } else {
+      startNewComposition();
+    }
+  };
+
+  // Dialog: download the current composition, then start fresh.
+  const handleNewSaveFirst = async () => {
+    await handleSave();
+    setShowNewDialog(false);
+    startNewComposition();
+  };
+
+  // Dialog: discard (current stays in the local library) and start fresh.
+  const handleNewDiscard = () => {
+    setShowNewDialog(false);
+    startNewComposition();
   };
 
   const handleSettingsSave = () => {
@@ -258,6 +286,9 @@ export const EditorScreen: React.FC = () => {
           placeholder="Untitled Song"
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Tooltip title="New composition">
+            <IconButton onClick={handleCreateNew}><NoteAddIcon /></IconButton>
+          </Tooltip>
           <Tooltip title="Print">
             <span><IconButton onClick={() => setShowPrintDialog(true)} disabled={isPrinting}><PrintIcon /></IconButton></span>
           </Tooltip>
@@ -503,6 +534,22 @@ export const EditorScreen: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setShowSettingsDialog(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleSettingsSave}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New-composition confirmation */}
+      <Dialog open={showNewDialog} onClose={() => setShowNewDialog(false)}>
+        <DialogTitle>Start a new composition?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Save "{currentComposition.title || 'Untitled Song'}" as a .hmlcc file before starting fresh?
+            It also stays in your local library either way.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowNewDialog(false)}>Cancel</Button>
+          <Button color="error" onClick={handleNewDiscard}>Discard</Button>
+          <Button variant="contained" onClick={handleNewSaveFirst} disabled={isSaving}>Save</Button>
         </DialogActions>
       </Dialog>
 
