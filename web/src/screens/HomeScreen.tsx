@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Card, CardActionArea, CardContent, Typography, Fab, IconButton,
+  Box, Card, CardActionArea, CardContent, Typography, IconButton,
   Snackbar, CircularProgress, Tooltip, Dialog, DialogTitle, DialogContent,
   DialogContentText, DialogActions, Button,
 } from '@mui/material';
@@ -71,13 +71,18 @@ export const HomeScreen: React.FC = () => {
             {compositions.length} file{compositions.length !== 1 ? 's' : ''}
           </Typography>
         </Box>
-        <Tooltip title="Import .hmlcc file">
-          <span>
-            <IconButton color="primary" onClick={handleImport} disabled={isImporting}>
-              <FolderOpenIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew}>
+            New
+          </Button>
+          <Tooltip title="Import .hmlcc file">
+            <span>
+              <IconButton color="primary" onClick={handleImport} disabled={isImporting}>
+                <FolderOpenIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Box>
       </Box>
 
       {isLoading || isImporting ? (
@@ -120,16 +125,6 @@ export const HomeScreen: React.FC = () => {
           ))}
         </Box>
       )}
-
-      <Fab
-        color="primary"
-        variant="extended"
-        onClick={handleCreateNew}
-        sx={{ position: 'fixed', right: 16, bottom: 16 }}
-      >
-        <AddIcon sx={{ mr: 1 }} />
-        New
-      </Fab>
 
       <Snackbar
         open={snackbar.open}
