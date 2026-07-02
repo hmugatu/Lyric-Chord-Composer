@@ -10,33 +10,30 @@ export default function TabLayout() {
           backgroundColor: '#6200ee',
         },
         headerTintColor: '#fff',
+        headerShown: true,
       }}
+      initialRouteName="index"
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Compositions',
+          tabBarLabel: 'Compositions',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="music-note-plus" size={size} color={color} />
           ),
+          headerTitle: 'My Compositions',
         }}
       />
       <Tabs.Screen
         name="editor"
         options={{
           title: 'Editor',
+          tabBarLabel: 'Editor',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="pencil-ruler" size={size} color={color} />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Library',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="library-music" size={size} color={color} />
-          ),
+          headerTitle: 'Lyric Chord Composition Editor',
         }}
       />
     </Tabs>

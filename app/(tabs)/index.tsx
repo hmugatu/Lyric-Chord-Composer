@@ -1,25 +1,24 @@
 import React from 'react';
 import { View, StyleSheet, FlatList, Alert } from 'react-native';
-import { Text, Button, Card, FAB, Searchbar, Menu, IconButton, Snackbar } from 'react-native-paper';
+import { Text, Card, FAB, IconButton, Snackbar, Dialog, Portal, Button, ActivityIndicator } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCompositionStore } from '../../src/store/compositionStore';
+import { CompositionStorageService } from '../../src/services/compositionService';
 import { router } from 'expo-router';
 import { Composition } from '../../src/models';
 
 export default function HomeScreen() {
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [menuVisible, setMenuVisible] = React.useState(false);
   const [snackbar, setSnackbar] = React.useState({ visible: false, message: '' });
+  const [isImporting, setIsImporting] = React.useState(false);
 
   const compositions = useCompositionStore((state) => state.compositions);
   const createComposition = useCompositionStore((state) => state.createComposition);
   const loadComposition = useCompositionStore((state) => state.loadComposition);
-  const importComposition = useCompositionStore((state) => state.importComposition);
-  const importCompositions = useCompositionStore((state) => state.importCompositions);
-  const exportComposition = useCompositionStore((state) => state.exportComposition);
-  const exportAllCompositions = useCompositionStore((state) => state.exportAllCompositions);
+  const addComposition = useCompositionStore((state) => state.addComposition);
+  const setCurrentComposition = useCompositionStore((state) => state.setCurrentComposition);
   const isLoading = useCompositionStore((state) => state.isLoading);
-  const isSaving = useCompositionStore((state) => state.isSaving);
   const initializeStore = useCompositionStore((state) => state.initializeStore);
+  const storageService = new CompositionStorageService();
 
   // Initialize store on mount
   React.useEffect(() => {
@@ -34,51 +33,65 @@ export default function HomeScreen() {
 
   const handleOpenComposition = (composition: Composition) => {
     loadComposition(composition.id);
-    router.push(`/composition/${composition.id}`);
+    router.push('/editor');
   };
 
-  const handleImportOne = async () => {
-    setMenuVisible(false);
+  const handleImportFromLocal = async () => {
     try {
-      await importComposition();
+      setIsImporting(true);
+      await storageService.setProvider('local');
+      const result = await storageService.importComposition();
+      addComposition(result.composition);
+      setCurrentComposition(result.composition.id);
       setSnackbar({ visible: true, message: 'Composition imported successfully!' });
     } catch (error) {
       Alert.alert('Import Failed', error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  const handleImportMultiple = async () => {
-    setMenuVisible(false);
+  const handleImportFromGoogleDrive = async () => {
     try {
-      await importCompositions();
-      setSnackbar({ visible: true, message: 'Compositions imported successfully!' });
+      setIsImporting(true);
+      await storageService.setProvider('google-drive');
+      const results = await storageService.importCompositions();
+      if (results.length > 0) {
+        const composition = results[0].composition;
+        addComposition(composition);
+        setCurrentComposition(composition.id);
+        setSnackbar({ visible: true, message: 'Composition imported from Google Drive!' });
+      }
     } catch (error) {
-      Alert.alert('Import Failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Import Failed', error instanceof Error ? error.message : 'Failed to import from Google Drive');
+    } finally {
+      setIsImporting(false);
     }
   };
 
-  const handleExportAll = async () => {
-    setMenuVisible(false);
-    if (compositions.length === 0) {
-      Alert.alert('No Compositions', 'There are no compositions to export.');
-      return;
-    }
-
+  const handleImportFromOneDrive = async () => {
     try {
-      await exportAllCompositions();
-      setSnackbar({ visible: true, message: `Exported ${compositions.length} composition(s)` });
+      setIsImporting(true);
+      await storageService.setProvider('onedrive');
+      const results = await storageService.importCompositions();
+      if (results.length > 0) {
+        const composition = results[0].composition;
+        addComposition(composition);
+        setCurrentComposition(composition.id);
+        setSnackbar({ visible: true, message: 'Composition imported from OneDrive!' });
+      }
     } catch (error) {
-      Alert.alert('Export Failed', error instanceof Error ? error.message : 'Unknown error');
+      Alert.alert('Import Failed', error instanceof Error ? error.message : 'Failed to import from OneDrive');
+    } finally {
+      setIsImporting(false);
     }
   };
-
-  const filteredCompositions = compositions.filter((comp) =>
-    comp.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    comp.artist?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const renderComposition = ({ item }: { item: Composition }) => (
-    <Card style={styles.card} onPress={() => handleOpenComposition(item)}>
+    <Card
+      style={styles.card}
+      onPress={() => handleOpenComposition(item)}
+    >
       <Card.Content>
         <Text variant="titleLarge">{item.title}</Text>
         {item.artist && <Text variant="bodyMedium">{item.artist}</Text>}
@@ -102,47 +115,42 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Searchbar
-          placeholder="Search compositions"
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchbar}
-        />
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <IconButton
-              icon="dots-vertical"
-              size={24}
-              onPress={() => setMenuVisible(true)}
-              style={styles.menuButton}
-            />
-          }
-        >
-          <Menu.Item
-            onPress={handleImportOne}
-            title="Import .hmlcc file"
-            leadingIcon="file-import"
+        <View style={styles.titleSection}>
+          <Text variant="headlineSmall">My Compositions</Text>
+          <Text variant="bodySmall" style={styles.count}>
+            {compositions.length} file{compositions.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <View style={styles.iconButtons}>
+          <IconButton
+            icon="folder-open"
+            size={24}
+            onPress={handleImportFromLocal}
+            disabled={isImporting}
+            iconColor="#6200ee"
           />
-          <Menu.Item
-            onPress={handleImportMultiple}
-            title="Import multiple files"
-            leadingIcon="file-import"
+          <IconButton
+            icon="google-drive"
+            size={24}
+            onPress={handleImportFromGoogleDrive}
+            disabled={isImporting}
+            iconColor="#4285F4"
           />
-          <Menu.Item
-            onPress={handleExportAll}
-            title="Export all compositions"
-            leadingIcon="file-export"
-            disabled={compositions.length === 0}
+          <IconButton
+            icon="microsoft-onedrive"
+            size={24}
+            onPress={handleImportFromOneDrive}
+            disabled={isImporting}
+            iconColor="#0078D4"
           />
-        </Menu>
+        </View>
       </View>
 
-      {isLoading || isSaving ? (
+      {isLoading || isImporting ? (
         <View style={styles.loading}>
-          <Text variant="bodyMedium">
-            {isLoading ? 'Loading...' : 'Exporting...'}
+          <ActivityIndicator animating={true} size="large" />
+          <Text variant="bodyMedium" style={styles.loadingText}>
+            {isLoading ? 'Loading...' : 'Importing...'}
           </Text>
         </View>
       ) : compositions.length === 0 ? (
@@ -157,7 +165,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <FlatList
-          data={filteredCompositions}
+          data={compositions}
           renderItem={renderComposition}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
@@ -186,9 +194,6 @@ export default function HomeScreen() {
   );
 }
 
-// Import icon for empty state
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -197,20 +202,31 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  searchbar: {
+  titleSection: {
     flex: 1,
-    margin: 16,
-    marginRight: 0,
   },
-  menuButton: {
-    margin: 0,
+  count: {
+    color: '#999',
+    marginTop: 4,
+  },
+  iconButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
   },
   list: {
     padding: 16,

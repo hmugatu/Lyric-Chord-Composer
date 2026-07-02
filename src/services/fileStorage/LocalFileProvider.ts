@@ -5,11 +5,12 @@
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
-import type { ExportOptions, ImportResult } from './types';
+import type { ExportOptions, ImportResult, StorageProvider, FileMetadata } from './types';
 
-export class LocalFileProvider {
+export class LocalFileProvider implements StorageProvider {
   /**
    * Export a composition to a .hmlcc file
    */
@@ -20,16 +21,27 @@ export class LocalFileProvider {
     const finalFilename = filename.endsWith('.hmlcc') ? filename : `${filename}.hmlcc`;
 
     try {
-      // Create file in cache directory
-      const fileUri = `${FileSystem.cacheDirectory}${finalFilename}`;
+      if (Platform.OS === 'web') {
+        // For web, use blob download
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = finalFilename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } else {
+        // For mobile, use file system and sharing
+        const fileUri = `${Paths.document.uri}/${finalFilename}`;
 
-      // Write content to file
-      await FileSystem.writeAsStringAsync(fileUri, content, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+        // Write content to file
+        await FileSystem.writeAsStringAsync(fileUri, content, {
+          encoding: 'utf8' as any,
+        });
 
-      // Share/save the file
-      if (Platform.OS === 'android' || Platform.OS === 'ios') {
+        // Share/save the file
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
           await Sharing.shareAsync(fileUri, {
@@ -40,9 +52,6 @@ export class LocalFileProvider {
         } else {
           throw new Error('Sharing is not available on this device');
         }
-      } else {
-        // For web, trigger download
-        await Sharing.shareAsync(fileUri);
       }
     } catch (error) {
       console.error('Export error:', error);
@@ -55,8 +64,12 @@ export class LocalFileProvider {
    */
   async importFile(): Promise<ImportResult> {
     try {
+      if (Platform.OS === 'web') {
+        return await this.importFileWeb();
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/x-hmlcc', 'text/plain', '*/*'], // Accept .hmlcc or any text file
+        type: '*/*', // Show all files, we validate .hmlcc extension after selection
         copyToCacheDirectory: true,
       });
 
@@ -73,7 +86,7 @@ export class LocalFileProvider {
 
       // Read file content
       const content = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: 'utf8' as any,
       });
 
       // Validate JSON content
@@ -94,12 +107,54 @@ export class LocalFileProvider {
   }
 
   /**
+   * Web-specific import using native file input with .hmlcc filter
+   */
+  private importFileWeb(): Promise<ImportResult> {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.hmlcc';
+
+      input.onchange = async (e) => {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) {
+          reject(new Error('File selection was cancelled'));
+          return;
+        }
+
+        if (!file.name.endsWith('.hmlcc')) {
+          reject(new Error('Invalid file type. Please select a .hmlcc file'));
+          return;
+        }
+
+        try {
+          const content = await file.text();
+          JSON.parse(content); // Validate JSON
+          resolve({ filename: file.name, content });
+        } catch {
+          reject(new Error('Invalid file format. The file does not contain valid JSON'));
+        }
+      };
+
+      input.oncancel = () => {
+        reject(new Error('File selection was cancelled'));
+      };
+
+      input.click();
+    });
+  }
+
+  /**
    * Import multiple files
    */
   async importMultipleFiles(): Promise<ImportResult[]> {
     try {
+      if (Platform.OS === 'web') {
+        return await this.importMultipleFilesWeb();
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/x-hmlcc', 'text/plain', '*/*'],
+        type: '*/*', // Show all files, we validate .hmlcc extension after selection
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -121,7 +176,7 @@ export class LocalFileProvider {
 
         // Read file content
         const content = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.UTF8,
+          encoding: 'utf8' as any,
         });
 
         // Validate JSON
@@ -142,5 +197,76 @@ export class LocalFileProvider {
       console.error('Import multiple error:', error);
       throw new Error(`Failed to import files: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Web-specific multiple file import using native file input with .hmlcc filter
+   */
+  private importMultipleFilesWeb(): Promise<ImportResult[]> {
+    return new Promise((resolve, reject) => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.hmlcc';
+      input.multiple = true;
+
+      input.onchange = async (e) => {
+        const files = (e.target as HTMLInputElement).files;
+        if (!files || files.length === 0) {
+          reject(new Error('File selection was cancelled'));
+          return;
+        }
+
+        const imports: ImportResult[] = [];
+
+        for (const file of Array.from(files)) {
+          if (!file.name.endsWith('.hmlcc')) {
+            console.warn(`Skipping ${file.name}: not a .hmlcc file`);
+            continue;
+          }
+
+          try {
+            const content = await file.text();
+            JSON.parse(content); // Validate JSON
+            imports.push({ filename: file.name, content });
+          } catch {
+            console.warn(`Skipping ${file.name}: invalid JSON content`);
+          }
+        }
+
+        if (imports.length === 0) {
+          reject(new Error('No valid .hmlcc files were imported'));
+          return;
+        }
+
+        resolve(imports);
+      };
+
+      input.oncancel = () => {
+        reject(new Error('File selection was cancelled'));
+      };
+
+      input.click();
+    });
+  }
+
+  // StorageProvider interface implementation
+  async listFiles(): Promise<FileMetadata[]> {
+    return [];
+  }
+
+  async readFile(): Promise<string> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  async writeFile(): Promise<FileMetadata> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  async deleteFile(): Promise<void> {
+    throw new Error('Not applicable for local provider');
+  }
+
+  getProviderName(): string {
+    return 'Local';
   }
 }
