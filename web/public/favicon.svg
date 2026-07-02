@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#6200ee"/>
+  <g stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- guitar body (figure-8) -->
+    <path d="M40 30
+             a11 11 0 1 1 -6 -6
+             l7 -7
+             a4.5 4.5 0 0 1 6 6
+             z" fill="#ffffff" fill-opacity="0.12"/>
+    <!-- neck -->
+    <path d="M45 21 L56 10"/>
+    <!-- headstock -->
+    <path d="M55 9 l4 -4 M58 12 l4 -4"/>
+    <!-- sound hole -->
+    <circle cx="30" cy="34" r="4.5" fill="#ffffff" fill-opacity="0.9" stroke="none"/>
+  </g>
+</svg>
