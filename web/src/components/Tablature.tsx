@@ -121,11 +121,20 @@ export const Tablature: React.FC<TablatureProps> = ({
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      backgroundColor: '#fff',
                       top: yPos - 7,
                     }}
                   >
-                    <span style={{ fontSize: 9, fontWeight: 'bold', color: '#000', fontFamily: 'monospace' }}>
+                    <span
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 'bold',
+                        color: '#000',
+                        fontFamily: 'monospace',
+                        backgroundColor: '#fff',
+                        padding: '0 1px',
+                        lineHeight: 1,
+                      }}
+                    >
                       {displayValue}
                     </span>
                   </div>
