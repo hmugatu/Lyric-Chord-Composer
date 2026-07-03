@@ -13,20 +13,33 @@ interface StaffNotesProps {
   height: number;
   numMeasures?: number;
   beatsPerBar?: number;
+  /** Time signature numerator (e.g. 3 in 3/4). */
+  tsBeats?: number;
+  /** Time signature denominator (e.g. 8 in 6/8). */
+  tsBeatValue?: number;
   scale?: number;
 }
 
-// Base note duration for a single chord filling one slot, by slots-per-bar.
-// 2 -> half, 4 -> quarter, 8 -> eighth (all divide 4/4 cleanly).
-const BASE_DURATION: { [slots: number]: string } = { 2: 'h', 4: 'q', 8: '8' };
+// VexFlow tick constants (a whole note = 4096 ticks).
+const WHOLE_TICKS = 4096;
 
-// Duration for a chord that spans `span` consecutive slots, per slots-per-bar.
-// Keys are (span - 1). Only combinations that map to a single notatable value.
-const SPAN_DURATION: { [slots: number]: { [k: number]: string } } = {
-  2: { 0: 'h', 1: 'w' }, // half, then whole
-  4: { 0: 'q', 1: 'h', 2: 'hd', 3: 'w' }, // quarter, half, dotted-half, whole
-  8: { 0: '8', 1: 'q', 3: 'h', 7: 'w' }, // eighth, quarter, half, whole (clean divisions)
-};
+// Map a tick count to the nearest clean VexFlow duration string. Falls back to
+// the largest value that fits, so any measure/slot combo renders without error.
+function ticksToDuration(ticks: number): { duration: string; ticks: number } {
+  const table: { t: number; d: string }[] = [
+    { t: WHOLE_TICKS, d: 'w' },        // whole
+    { t: WHOLE_TICKS * 0.75, d: 'hd' }, // dotted half
+    { t: WHOLE_TICKS / 2, d: 'h' },    // half
+    { t: WHOLE_TICKS * 0.375, d: 'qd' }, // dotted quarter
+    { t: WHOLE_TICKS / 4, d: 'q' },    // quarter
+    { t: WHOLE_TICKS / 8, d: '8' },    // eighth
+    { t: WHOLE_TICKS / 16, d: '16' },  // sixteenth
+  ];
+  for (const row of table) {
+    if (ticks >= row.t) return { duration: row.d, ticks: row.t };
+  }
+  return { duration: '16', ticks: WHOLE_TICKS / 16 };
+}
 
 function getChordNotesVexFlow(chordName: string): string[] {
   if (!chordName || chordName.trim() === '' || chordName === '-') {
@@ -98,6 +111,8 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
   height,
   numMeasures = 1,
   beatsPerBar = 4,
+  tsBeats = 4,
+  tsBeatValue = 4,
   scale = 0.75,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -142,43 +157,43 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
           const stave = new Stave(xPos / scale, 0, measureWidth / scale);
           if (m === 0) {
             stave.addClef('treble');
-            stave.addTimeSignature('4/4');
+            stave.addTimeSignature(`${tsBeats}/${tsBeatValue}`);
           }
           stave.setContext(context).draw();
 
           const notes: any[] = [];
           const startBeat = m * beatsPerBar;
 
-          const baseDuration = BASE_DURATION[beatsPerBar] || 'q';
-          const spanMap = SPAN_DURATION[beatsPerBar] || SPAN_DURATION[4];
+          // Ticks in one full measure of this time signature, split across slots.
+          const measureTicks = (WHOLE_TICKS * tsBeats) / tsBeatValue;
+          const slotTicks = measureTicks / beatsPerBar;
+          const baseNote = ticksToDuration(slotTicks);
 
           const processedBeats = new Set<number>();
 
           for (let b = 0; b < beatsPerBar; b++) {
             if (processedBeats.has(b)) continue;
 
-            const beatIndex = startBeat + b;
-            const chord = beatChords[beatIndex] || '';
+            const chord = beatChords[startBeat + b] || '';
             const chordNotes = getChordNotesVexFlow(chord);
 
             // Count consecutive empty slots after this one (how long the chord rings).
-            let emptyCount = 0;
+            let span = 1;
             for (let c = b + 1; c < beatsPerBar; c++) {
               const nextChord = beatChords[startBeat + c] || '';
               if (!nextChord || nextChord.trim() === '' || nextChord === '-') {
-                emptyCount++;
+                span++;
               } else {
                 break;
               }
             }
 
             if (chordNotes.length > 0) {
-              // Use a spanning duration when the run maps to a clean note value;
-              // otherwise emit one base-duration note and let the trailing empty
-              // slots become ghost notes so the measure still sums correctly.
-              const spanDuration = spanMap[emptyCount];
-              const duration = spanDuration || baseDuration;
-              const staveNote = new StaveNote({ keys: chordNotes, duration });
+              // Render the chord at the largest clean duration that fits its span,
+              // then pad the leftover span with ghost notes so the bar still sums.
+              const spanTicks = slotTicks * span;
+              const noteVal = ticksToDuration(spanTicks);
+              const staveNote = new StaveNote({ keys: chordNotes, duration: noteVal.duration });
 
               chordNotes.forEach((noteStr, i) => {
                 if (noteStr.includes('#')) {
@@ -189,17 +204,29 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
               });
 
               notes.push(staveNote);
-              const consumed = spanDuration ? emptyCount : 0;
-              for (let p = b; p <= b + consumed; p++) {
+
+              // Fill any remainder of the span with ghost notes (one per leftover slot).
+              const usedSlots = Math.max(1, Math.round(noteVal.ticks / slotTicks));
+              for (let f = 1; f < usedSlots && b + f < beatsPerBar; f++) {
+                // covered by the note itself
+              }
+              const filledSlots = Math.min(span, Math.max(1, usedSlots));
+              for (let p = b; p < b + filledSlots; p++) processedBeats.add(p);
+              for (let p = b + filledSlots; p < b + span; p++) {
+                notes.push(new GhostNote({ duration: baseNote.duration }));
                 processedBeats.add(p);
               }
             } else {
-              notes.push(new GhostNote({ duration: baseDuration }));
+              notes.push(new GhostNote({ duration: baseNote.duration }));
               processedBeats.add(b);
             }
           }
 
-          const voice = new Voice({ numBeats: 4, beatValue: 4 });
+          // Non-strict: chords-per-bar and the time signature don't always divide
+          // evenly (e.g. 8 slots in 3/4), so allow approximate tick sums rather
+          // than throwing. Fine for a guitar-forward chart.
+          const voice = new Voice({ numBeats: tsBeats, beatValue: tsBeatValue });
+          voice.setStrict(false);
           voice.addTickables(notes);
 
           // formatWidth is in draw space (stave was placed in draw space above).

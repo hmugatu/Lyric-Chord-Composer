@@ -509,7 +509,15 @@ export const EditorScreen: React.FC = () => {
 
                   {/* Staff */}
                   <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, height: 160, position: 'relative', overflow: 'hidden' }}>
-                    <StaffNotes beatChords={rowBeatChords} width={CONTENT_WIDTH} height={85} numMeasures={4} beatsPerBar={chordsPerBar} />
+                    <StaffNotes
+                      beatChords={rowBeatChords}
+                      width={CONTENT_WIDTH}
+                      height={85}
+                      numMeasures={4}
+                      beatsPerBar={chordsPerBar}
+                      tsBeats={currentComposition.globalSettings.timeSignature.beats}
+                      tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
+                    />
                   </Box>
                 </Box>
               );
