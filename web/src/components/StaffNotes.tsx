@@ -100,14 +100,17 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
         containerRef.current!.innerHTML = '';
 
         const renderer = new Renderer(containerRef.current!, Renderer.Backends.SVG);
-        const scaledWidth = width / scale;
-        const scaledHeight = height / scale;
-        renderer.resize(scaledWidth, scaledHeight);
+        renderer.resize(width, height);
         const context = renderer.getContext();
+        // Scale glyphs down for a cleaner look; geometry below is expressed in
+        // real pixels and divided by `scale` so it lands at true pixel coords
+        // after the context multiplies by `scale`. This keeps measure bar lines
+        // aligned with the Tablature component, which uses identical pixel math.
         context.scale(scale, scale);
         context.setFont('Arial', 10);
 
-        const totalWidth = scaledWidth - 20;
+        // Measure widths in REAL pixels — must match Tablature.tsx exactly.
+        const totalWidth = width - 20;
         const firstMeasureWidth = totalWidth / numMeasures + 40;
         const otherMeasureWidth = (totalWidth - firstMeasureWidth) / (numMeasures - 1);
 
@@ -121,7 +124,8 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
             measureWidth = otherMeasureWidth;
           }
 
-          const stave = new Stave(xPos, 0, measureWidth);
+          // Convert real-pixel geometry into draw space (context is scaled by `scale`).
+          const stave = new Stave(xPos / scale, 0, measureWidth / scale);
           if (m === 0) {
             stave.addClef('treble');
             stave.addTimeSignature('4/4');
@@ -179,7 +183,8 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
           const voice = new Voice({ numBeats: 4, beatValue: 4 });
           voice.addTickables(notes);
 
-          const formatWidth = m === 0 ? measureWidth - 80 : measureWidth - 20;
+          // formatWidth is in draw space (stave was placed in draw space above).
+          const formatWidth = (m === 0 ? measureWidth - 80 : measureWidth - 20) / scale;
           new Formatter().joinVoices([voice]).format([voice], formatWidth);
           voice.draw(context, stave);
         }
