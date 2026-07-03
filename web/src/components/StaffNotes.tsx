@@ -6,6 +6,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as Tonal from '@tonaljs/tonal';
+import type { TabCell as TabCellT } from '../models/Tablature';
 
 interface StaffNotesProps {
   beatChords: string[];
@@ -111,14 +112,38 @@ function formatNoteForVexFlow(noteName: string, octave: number): string {
   return `${note}/${octave}`;
 }
 
+const STANDARD_OPEN = ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'];
+
+// (string index 0-5 low->high, fret) -> VexFlow key like "c#/4", using the
+// composition tuning (open-string note transposed up by `fret` semitones).
+function fretToVexKey(stringIndex: number, fret: number, tuning: string[]): string | null {
+  const open = tuning[stringIndex] || STANDARD_OPEN[stringIndex];
+  if (!open) return null;
+  try {
+    const pitch = Tonal.Note.transpose(open, Tonal.Interval.fromSemitones(fret));
+    const parsed = Tonal.Note.get(pitch);
+    if (!parsed || parsed.empty || parsed.oct == null) return null;
+    const acc = parsed.acc || '';
+    return `${parsed.letter.toLowerCase()}${acc}/${parsed.oct}`;
+  } catch {
+    return null;
+  }
+}
+
+// Map a NoteDuration model value to a VexFlow duration string.
+const DURATION_TO_VF: Record<string, string> = {
+  whole: 'w', half: 'h', quarter: 'q', eighth: '8', sixteenth: '16', 'thirty-second': '32',
+};
+
 export const StaffNotes: React.FC<StaffNotesProps> = ({
-  beatChords,
   width,
   height,
   numMeasures = 1,
-  beatsPerBar = 4,
   tsBeats = 4,
   tsBeatValue = 4,
+  tuning = STANDARD_OPEN,
+  barTab = {},
+  rowStartBar = 0,
   scale = 0.75,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -168,63 +193,47 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
           stave.setContext(context).draw();
 
           const notes: any[] = [];
-          const startBeat = m * beatsPerBar;
 
-          // Ticks in one full measure of this time signature, split across slots.
-          const measureTicks = (WHOLE_TICKS * tsBeats) / tsBeatValue;
-          const slotTicks = measureTicks / beatsPerBar;
-          const baseNote = ticksToDuration(slotTicks);
+          // Cells per bar on the 16th grid; each occupied cell becomes a staff
+          // note (stacked = chord). Empty cells become ghost notes for timing.
+          const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
+          const bar = rowStartBar + m;
 
-          const processedBeats = new Set<number>();
+          // Group this measure's tab cells by cell index -> { string: TabCell }.
+          const byCell = new Map<number, { string: number; cell: TabCellT }[]>();
+          for (const [key, cellData] of Object.entries(barTab || {})) {
+            const [b, cIdx, s] = key.split(':').map(Number);
+            if (b !== bar) continue;
+            if (cellData.fret === 'x') continue; // muted string -> no staff pitch
+            const list = byCell.get(cIdx) || [];
+            list.push({ string: s, cell: cellData });
+            byCell.set(cIdx, list);
+          }
 
-          for (let b = 0; b < beatsPerBar; b++) {
-            if (processedBeats.has(b)) continue;
+          // Default ghost-note duration = one 16th cell.
+          const cellDur = DURATION_TO_VF['sixteenth'];
 
-            const chord = beatChords[startBeat + b] || '';
-            const chordNotes = getChordNotesVexFlow(chord);
-
-            // Count consecutive empty slots after this one (how long the chord rings).
-            let span = 1;
-            for (let c = b + 1; c < beatsPerBar; c++) {
-              const nextChord = beatChords[startBeat + c] || '';
-              if (!nextChord || nextChord.trim() === '' || nextChord === '-') {
-                span++;
-              } else {
-                break;
+          for (let c = 0; c < cellsPerBar; c++) {
+            const group = byCell.get(c);
+            if (group && group.length > 0) {
+              const keys = group
+                .map((g) => fretToVexKey(g.string, g.cell.fret as number, tuning))
+                .filter((k): k is string => !!k);
+              if (keys.length === 0) {
+                notes.push(new GhostNote({ duration: cellDur }));
+                continue;
               }
-            }
-
-            if (chordNotes.length > 0) {
-              // Render the chord at the largest clean duration that fits its span,
-              // then pad the leftover span with ghost notes so the bar still sums.
-              const spanTicks = slotTicks * span;
-              const noteVal = ticksToDuration(spanTicks);
-              const staveNote = new StaveNote({ keys: chordNotes, duration: noteVal.duration });
-
-              chordNotes.forEach((noteStr, i) => {
-                if (noteStr.includes('#')) {
-                  staveNote.addModifier(new Accidental('#'), i);
-                } else if (noteStr.includes('b') && !noteStr.startsWith('b')) {
-                  staveNote.addModifier(new Accidental('b'), i);
-                }
+              // Duration: use the longest chosen among stacked notes (they share a stem).
+              const durModel = group.find((g) => g.cell.duration)?.cell.duration || 'sixteenth';
+              const duration = DURATION_TO_VF[durModel] || cellDur;
+              const staveNote = new StaveNote({ keys, duration });
+              keys.forEach((k, i) => {
+                if (k.includes('#')) staveNote.addModifier(new Accidental('#'), i);
+                else if (k.includes('b') && !k.startsWith('b')) staveNote.addModifier(new Accidental('b'), i);
               });
-
               notes.push(staveNote);
-
-              // Fill any remainder of the span with ghost notes (one per leftover slot).
-              const usedSlots = Math.max(1, Math.round(noteVal.ticks / slotTicks));
-              for (let f = 1; f < usedSlots && b + f < beatsPerBar; f++) {
-                // covered by the note itself
-              }
-              const filledSlots = Math.min(span, Math.max(1, usedSlots));
-              for (let p = b; p < b + filledSlots; p++) processedBeats.add(p);
-              for (let p = b + filledSlots; p < b + span; p++) {
-                notes.push(new GhostNote({ duration: baseNote.duration }));
-                processedBeats.add(p);
-              }
             } else {
-              notes.push(new GhostNote({ duration: baseNote.duration }));
-              processedBeats.add(b);
+              notes.push(new GhostNote({ duration: cellDur }));
             }
           }
 
@@ -246,7 +255,7 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
     };
 
     renderStaff();
-  }, [beatChords, width, height, numMeasures, scale]);
+  }, [barTab, tuning, rowStartBar, width, height, numMeasures, tsBeats, tsBeatValue, scale]);
 
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
