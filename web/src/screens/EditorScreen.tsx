@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, IconButton, Tooltip, Typography, TextField, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, InputAdornment, Snackbar,
-  ToggleButton, ToggleButtonGroup, MenuItem,
+  ToggleButton, ToggleButtonGroup, MenuItem, Popover,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -12,6 +12,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import { useCompositionStore } from '../store/compositionStore';
 import { ALTERNATE_TUNINGS } from '../models/Note';
+import type { TabCell, TabTechnique } from '../models/Tablature';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService, PrintOptions } from '../services/printService';
 import { PrintDialog } from '../components/PrintDialog';
@@ -24,11 +25,13 @@ import chordsDataJson from '../data/chords.json';
 interface PageState {
   barLyrics: string[];
   barBeatChords: string[][];
+  barTab?: Record<string, TabCell>;
 }
 
 const emptyPage = (slots = 4): PageState => ({
   barLyrics: Array(16).fill(''),
   barBeatChords: Array(16).fill(null).map(() => Array(slots).fill('')),
+  barTab: {},
 });
 
 // Fixed paper dimensions: 1000px = 8.5", 1100px = 11" (100px per inch)
@@ -52,6 +55,17 @@ const KEY_OPTIONS = [
 // Common time-signature values.
 const BEATS_OPTIONS = [2, 3, 4, 5, 6, 7, 9, 12];
 const BEAT_VALUE_OPTIONS = [2, 4, 8, 16];
+
+// Techniques offered in the tab-cell popover.
+const TECHNIQUE_OPTIONS: { value: TabTechnique; label: string }[] = [
+  { value: 'hammer-on', label: 'Hammer' },
+  { value: 'pull-off', label: 'Pull' },
+  { value: 'slide', label: 'Slide' },
+  { value: 'bend', label: 'Bend' },
+  { value: 'vibrato', label: 'Vibrato' },
+  { value: 'palm-mute', label: 'P.M.' },
+  { value: 'harmonic', label: 'Harm.' },
+];
 
 const totalMeasureWidth = CONTENT_WIDTH - 20;
 const firstMeasureWidth = totalMeasureWidth / 4 + 40;
@@ -105,10 +119,18 @@ export const EditorScreen: React.FC = () => {
   const [chordSearchText, setChordSearchText] = React.useState('');
   const [selectedChordData, setSelectedChordData] = React.useState<ChordData | null>(null);
 
+  // Tab-cell editing popover state.
+  const [tabPopover, setTabPopover] = React.useState<{
+    bar: number; cell: number; string: number; anchor: DOMRect; fret: string; techniques: TabTechnique[];
+  } | null>(null);
+
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
+  const tsBeats = currentComposition?.globalSettings.timeSignature.beats || 4;
+  const tsBeatValue = currentComposition?.globalSettings.timeSignature.beatValue || 4;
 
   const barLyrics = allPages[currentPage]?.barLyrics || Array(16).fill('');
   const barBeatChords = allPages[currentPage]?.barBeatChords || Array(16).fill(null).map(() => Array(chordsPerBar).fill(''));
+  const barTab = allPages[currentPage]?.barTab || {};
 
   // Persist the given pages array into the composition notes blob.
   const persistPages = (pages: PageState[]) => {
@@ -123,6 +145,55 @@ export const EditorScreen: React.FC = () => {
     newPages[currentPage] = { ...newPages[currentPage], barLyrics: newLyrics };
     setAllPages(newPages);
     persistPages(newPages);
+  };
+
+  const cellKey = (bar: number, cell: number, string: number) => `${bar}:${cell}:${string}`;
+
+  // Open the fret/technique popover for a clicked tab cell, seeded with any
+  // existing value at that string:cell.
+  const openTabCell = (bar: number, cell: number, string: number, anchor: DOMRect) => {
+    const existing = barTab[cellKey(bar, cell, string)];
+    setTabPopover({
+      bar, cell, string, anchor,
+      fret: existing ? String(existing.fret) : '',
+      techniques: existing?.techniques || [],
+    });
+  };
+
+  // Commit / clear a single tab cell, persisting into the current page's barTab.
+  const setTabCell = (bar: number, cell: number, string: number, value: TabCell | null) => {
+    const key = cellKey(bar, cell, string);
+    const nextTab = { ...(allPages[currentPage]?.barTab || {}) };
+    if (value === null) {
+      delete nextTab[key];
+    } else {
+      nextTab[key] = value;
+    }
+    const newPages = [...allPages];
+    newPages[currentPage] = { ...newPages[currentPage], barTab: nextTab };
+    setAllPages(newPages);
+    persistPages(newPages);
+  };
+
+  // Commit the popover: parse the fret ('x' or 0-24); empty clears the cell.
+  const applyTabPopover = () => {
+    if (!tabPopover) return;
+    const raw = tabPopover.fret.trim().toLowerCase();
+    if (raw === '') {
+      setTabCell(tabPopover.bar, tabPopover.cell, tabPopover.string, null);
+    } else {
+      const fret: number | 'x' = raw === 'x' ? 'x' : Math.max(0, Math.min(24, parseInt(raw) || 0));
+      const cell: TabCell = { fret };
+      if (tabPopover.techniques.length > 0) cell.techniques = tabPopover.techniques;
+      setTabCell(tabPopover.bar, tabPopover.cell, tabPopover.string, cell);
+    }
+    setTabPopover(null);
+  };
+
+  const clearTabPopover = () => {
+    if (!tabPopover) return;
+    setTabCell(tabPopover.bar, tabPopover.cell, tabPopover.string, null);
+    setTabPopover(null);
   };
 
   const setBarBeatChords = (newChords: string[][]) => {
@@ -518,7 +589,20 @@ export const EditorScreen: React.FC = () => {
                   {/* Tablature — vertical padding only; horizontal padding would
                       push the 900px-wide notation past the content edge. */}
                   <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, position: 'relative', overflow: 'hidden' }}>
-                    <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} beatsPerBar={chordsPerBar} paperColor={PAPER_COLOR} />
+                    <Tablature
+                      beatChords={rowBeatChords}
+                      chordsData={chordsData}
+                      width={CONTENT_WIDTH}
+                      height={65}
+                      numMeasures={4}
+                      beatsPerBar={chordsPerBar}
+                      tsBeats={tsBeats}
+                      tsBeatValue={tsBeatValue}
+                      paperColor={PAPER_COLOR}
+                      rowStartBar={rowIndex * 4}
+                      barTab={barTab}
+                      onCellClick={openTabCell}
+                    />
                   </Box>
 
                   <Box sx={{ height: 2 }} />
@@ -753,6 +837,81 @@ export const EditorScreen: React.FC = () => {
       </Dialog>
 
       <PrintDialog open={showPrintDialog} onClose={() => setShowPrintDialog(false)} onPrint={handlePrint} />
+
+      {/* Tab-cell fret + technique popover */}
+      <Popover
+        open={tabPopover !== null}
+        onClose={() => setTabPopover(null)}
+        anchorReference="anchorPosition"
+        anchorPosition={tabPopover ? { top: tabPopover.anchor.bottom + 4, left: tabPopover.anchor.left } : undefined}
+      >
+        {tabPopover && (
+          <Box sx={{ p: 1.5, width: 240 }}>
+            <Typography variant="caption" color="text.secondary">
+              String {6 - tabPopover.string} (low E = 1) · 16th #{tabPopover.cell + 1}
+            </Typography>
+            <TextField
+              label="Fret"
+              size="small"
+              autoFocus
+              fullWidth
+              value={tabPopover.fret}
+              onChange={(e) => setTabPopover({ ...tabPopover, fret: e.target.value })}
+              placeholder="0-24 or x"
+              sx={{ mt: 1 }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  applyTabPopover();
+                }
+              }}
+            />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+              {['x', '0', '1', '2', '3', '4', '5', '7', '9', '12'].map((f) => (
+                <Button
+                  key={f}
+                  size="small"
+                  variant={tabPopover.fret === f ? 'contained' : 'outlined'}
+                  onClick={() => setTabPopover({ ...tabPopover, fret: f })}
+                  sx={{ minWidth: 32, px: 0.5 }}
+                >
+                  {f}
+                </Button>
+              ))}
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+              Technique
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+              {TECHNIQUE_OPTIONS.map((t) => {
+                const active = tabPopover.techniques.includes(t.value);
+                return (
+                  <Button
+                    key={t.value}
+                    size="small"
+                    variant={active ? 'contained' : 'outlined'}
+                    color={active ? 'info' : 'inherit'}
+                    onClick={() =>
+                      setTabPopover({
+                        ...tabPopover,
+                        techniques: active
+                          ? tabPopover.techniques.filter((x) => x !== t.value)
+                          : [...tabPopover.techniques, t.value],
+                      })
+                    }
+                    sx={{ minWidth: 0, px: 0.75, textTransform: 'none' }}
+                  >
+                    {t.label}
+                  </Button>
+                );
+              })}
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1.5 }}>
+              <Button size="small" color="inherit" onClick={clearTabPopover}>Clear</Button>
+              <Button size="small" variant="contained" onClick={applyTabPopover}>Apply</Button>
+            </Box>
+          </Box>
+        )}
+      </Popover>
 
       <Snackbar
         open={snackbar.open}

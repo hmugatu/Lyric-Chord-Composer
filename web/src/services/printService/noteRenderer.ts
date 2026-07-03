@@ -240,6 +240,11 @@ export interface ChordDataForTab {
   fingering: string[];
 }
 
+/** A user-entered tab cell for print (mirror of models/Tablature TabCell). */
+export interface UserTabCell {
+  fret: number | 'x';
+}
+
 /**
  * Generate inline SVG string for tablature in HTML print output
  */
@@ -248,15 +253,28 @@ export function generateTablatureHtml(
   chordsData: ChordDataForTab[],
   measureWidth: number,
   tabHeight: number,
-  beatsPerBar = 4
+  beatsPerBar = 4,
+  userTab?: Record<string, UserTabCell>,
+  rowStartBar = 0,
+  cellsPerBar = 16,
+  numMeasures = 4
 ): string {
-  // Check if there are any chords - fret numbers are conditional
-  const hasChords = beatChords.some(c => c && c.trim() !== '' && c !== '-');
+  const userEntries = userTab ? Object.entries(userTab) : [];
+  // Fret numbers render if there are chords OR any user-entered frets.
+  const hasChords = beatChords.some(c => c && c.trim() !== '' && c !== '-') || userEntries.length > 0;
 
   const beatWidth = measureWidth / beatsPerBar;
   const stringSpacing = tabHeight / 6;
   const labelWidth = 12;
   const contentWidth = measureWidth - labelWidth;
+
+  // A string (model index 0-5) has a manual override in a given bar if any user
+  // cell exists there; in that case the faint chord-derived fret is suppressed.
+  const stringHasManual = (bar: number, modelString: number): boolean =>
+    userEntries.some(([k]) => {
+      const [b, , s] = k.split(':').map(Number);
+      return b === bar && s === modelString;
+    });
 
   // String labels (high to low: e B G D A E)
   const stringLabels = ['e', 'B', 'G', 'D', 'A', 'E'];
@@ -286,21 +304,39 @@ export function generateTablatureHtml(
     // So we need to reverse the order for display
     const displayFingering = [...chord.fingering].reverse();
 
+    const bar = rowStartBar + Math.floor(beatIndex / beatsPerBar);
+
     return displayFingering.map((fret, stringIndex) => {
+      const modelString = 5 - stringIndex;
+      if (stringHasManual(bar, modelString)) return ''; // manual overrides derived
       const y = stringSpacing * stringIndex + stringSpacing / 2 + 3;
       const displayValue = fret === 'x' ? 'x' : fret;
-      // Transparent background for fret number - lines show through
-      const bgRect = `<rect x="${beatX - 5}" y="${y - 8}" width="10" height="10" fill="none" />`;
-      const text = `<text x="${beatX}" y="${y}" font-size="9" font-family="monospace" font-weight="600" fill="#000" text-anchor="middle">${displayValue}</text>`;
-      return bgRect + text;
+      // Faint (chord-derived) fret; user-entered frets are drawn solid below.
+      const text = `<text x="${beatX}" y="${y}" font-size="9" font-family="monospace" font-weight="600" fill="#00000066" text-anchor="middle">${displayValue}</text>`;
+      return text;
     }).join('');
   }).join('')) : '';
+
+  // Solid user-entered frets at their 16th-cell positions across the row.
+  const totalCells = cellsPerBar * numMeasures;
+  const userFrets = userEntries.map(([key, cellData]) => {
+    const [bar, cell, modelString] = key.split(':').map(Number);
+    const localBar = bar - rowStartBar;
+    if (localBar < 0 || localBar >= numMeasures) return '';
+    const globalCell = localBar * cellsPerBar + cell;
+    const cellX = labelWidth + (contentWidth / totalCells) * globalCell + (contentWidth / totalCells) / 2;
+    const stringIndex = 5 - modelString; // display row (top = high e)
+    const y = stringSpacing * stringIndex + stringSpacing / 2 + 3;
+    const displayValue = cellData.fret === 'x' ? 'x' : String(cellData.fret);
+    return `<text x="${cellX}" y="${y}" font-size="9" font-family="monospace" font-weight="700" fill="#000" text-anchor="middle">${displayValue}</text>`;
+  }).join('');
 
   return `
     <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${tabHeight}" viewBox="0 0 ${measureWidth} ${tabHeight}" preserveAspectRatio="xMidYMid meet" style="margin-top: 2px;">
       ${stringLines}
       ${labels}
       ${fretNumbers}
+      ${userFrets}
     </svg>
   `;
 }

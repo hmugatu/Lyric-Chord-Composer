@@ -2,9 +2,15 @@
  * Tablature Component (web)
  * Renders 6-string guitar tab with absolutely-positioned divs.
  * Measure-width math matches StaffNotes so tab and staff stay aligned.
+ *
+ * Two subdivisions share the same per-measure geometry:
+ *  - beatsPerBar: chord slots, used to draw the FAINT chord-derived frets.
+ *  - cellsPerBar: 16th-note grid (tsBeats*16/tsBeatValue), used for the SOLID
+ *    user-entered frets and the invisible interactive click grid.
  */
 
 import React from 'react';
+import type { TabCell } from '../models/Tablature';
 
 interface ChordData {
   name: string;
@@ -21,8 +27,21 @@ interface TablatureProps {
   height?: number;
   numMeasures?: number;
   beatsPerBar?: number;
+  tsBeats?: number;
+  tsBeatValue?: number;
   paperColor?: string;
+  /** Absolute bar index this row starts at (rowIndex * 4), for keying barTab. */
+  rowStartBar?: number;
+  /** Sparse user frets, keyed "bar:cell:string" (see PageData.barTab). */
+  barTab?: Record<string, TabCell>;
+  /** Called when an interactive cell is clicked, with an anchor rect for a popover. */
+  onCellClick?: (bar: number, cell: number, string: number, anchor: DOMRect) => void;
 }
+
+// String display order top->bottom is [e B G D A E] (high string on top).
+// Model string index is low->high (0=E .. 5=e), so display row r maps to
+// model string (5 - r).
+const NUM_STRINGS = 6;
 
 export const Tablature: React.FC<TablatureProps> = ({
   beatChords,
@@ -31,16 +50,23 @@ export const Tablature: React.FC<TablatureProps> = ({
   height = 60,
   numMeasures = 4,
   beatsPerBar = 4,
+  tsBeats = 4,
+  tsBeatValue = 4,
   paperColor = '#fff',
+  rowStartBar = 0,
+  barTab,
+  onCellClick,
 }) => {
   const totalWidth = width - 20;
   const firstMeasureWidth = numMeasures > 1 ? totalWidth / numMeasures + 40 : totalWidth;
   const otherMeasureWidth = numMeasures > 1 ? (totalWidth - firstMeasureWidth) / (numMeasures - 1) : 0;
 
   // Space the staff reserves at the start of measure 1 for the clef + time
-  // signature. Offsetting the tab's first-measure beats by the same amount lines
-  // up the first chord's fret numbers with the first staff notes.
+  // signature, so the first measure's content lines up with the staff.
   const CLEF_RESERVE = 40;
+
+  // 16th-note cells per bar, driven by the time signature.
+  const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
 
   const beatFingerings = beatChords.map((chordName) => {
     if (!chordName || chordName.trim() === '' || chordName === '-') {
@@ -66,28 +92,28 @@ export const Tablature: React.FC<TablatureProps> = ({
     return positions;
   };
 
-  const getBeatXPosition = (beatIndex: number): number => {
-    const measureIndex = Math.floor(beatIndex / beatsPerBar);
-    const beatWithinMeasure = beatIndex % beatsPerBar;
+  // X-centre of subdivision `idx` (0-based across all measures) given how many
+  // subdivisions each measure has. Used for both beats and 16th cells.
+  const getSubdivisionX = (idx: number, perBar: number): number => {
+    const measureIndex = Math.floor(idx / perBar);
+    const within = idx % perBar;
 
     let measureStart = 10;
     if (measureIndex > 0) {
       measureStart = 10 + firstMeasureWidth + (measureIndex - 1) * otherMeasureWidth;
     }
+    const measureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
 
-    const currentMeasureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
-
-    // In measure 1 the staff pushes its first note past the clef/time-sig, so
-    // reserve the same space here and spread the beats across the remainder.
     if (measureIndex === 0) {
-      const usableWidth = currentMeasureWidth - CLEF_RESERVE;
-      const beatWidth = usableWidth / beatsPerBar;
-      return measureStart + CLEF_RESERVE + beatWidth * beatWithinMeasure + beatWidth / 2;
+      const usable = measureWidth - CLEF_RESERVE;
+      const w = usable / perBar;
+      return measureStart + CLEF_RESERVE + w * within + w / 2;
     }
-
-    const beatWidth = currentMeasureWidth / beatsPerBar;
-    return measureStart + beatWidth * beatWithinMeasure + beatWidth / 2;
+    const w = measureWidth / perBar;
+    return measureStart + w * within + w / 2;
   };
+
+  const totalCells = cellsPerBar * numMeasures;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'row', backgroundColor: paperColor, marginTop: 4, width, height }}>
@@ -115,41 +141,41 @@ export const Tablature: React.FC<TablatureProps> = ({
           />
         ))}
 
-        {/* Fret numbers for each beat */}
+        {/* FAINT chord-derived frets (at beat positions) */}
         {beatFingerings.map((fingering, beatIndex) => {
           if (!fingering) return null;
-          const beatX = getBeatXPosition(beatIndex);
-          // Fingering is [low E .. high e]; display order is [e B G D A E]
-          const displayFingering = [...fingering].reverse();
+          const beatX = getSubdivisionX(beatIndex, beatsPerBar);
+          const displayFingering = [...fingering].reverse(); // [e B G D A E]
 
           return (
-            <div key={`beat-${beatIndex}`} style={{ position: 'absolute', top: 0, bottom: 0, width: 18, left: beatX - 8 }}>
-              {displayFingering.map((fret, stringIndex) => {
+            <div key={`beat-${beatIndex}`} style={{ position: 'absolute', top: 0, bottom: 0, width: 18, left: beatX - 8, pointerEvents: 'none' }}>
+              {displayFingering.map((fret, row) => {
+                const modelString = NUM_STRINGS - 1 - row;
+                // If the user placed an explicit cell anywhere in this bar on this
+                // string, hide the derived fret for that string (manual wins).
+                const bar = rowStartBar + Math.floor(beatIndex / beatsPerBar);
+                const hasManualOnString =
+                  barTab &&
+                  Object.keys(barTab).some((k) => {
+                    const [b, , s] = k.split(':').map(Number);
+                    return b === bar && s === modelString;
+                  });
+                if (hasManualOnString) return null;
+
                 const displayValue = fret === 'x' ? 'x' : fret;
-                const yPos = stringHeight * stringIndex + stringHeight / 2;
+                const yPos = stringHeight * row + stringHeight / 2;
                 return (
                   <div
-                    key={`fret-${beatIndex}-${stringIndex}`}
+                    key={`fret-${beatIndex}-${row}`}
                     style={{
-                      position: 'absolute',
-                      left: 0,
-                      width: 18,
-                      height: 12,
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      top: yPos - 7,
+                      position: 'absolute', left: 0, width: 18, height: 12,
+                      display: 'flex', justifyContent: 'center', alignItems: 'center', top: yPos - 7,
                     }}
                   >
                     <span
                       style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: '#000',
-                        fontFamily: 'monospace',
-                        backgroundColor: paperColor,
-                        padding: '0 1px',
-                        lineHeight: 1,
+                        fontSize: 10, fontWeight: 600, color: '#00000066',
+                        fontFamily: 'monospace', backgroundColor: paperColor, padding: '0 1px', lineHeight: 1,
                       }}
                     >
                       {displayValue}
@@ -160,6 +186,71 @@ export const Tablature: React.FC<TablatureProps> = ({
             </div>
           );
         })}
+
+        {/* SOLID user-entered frets (at 16th-cell positions) */}
+        {barTab &&
+          Object.entries(barTab).map(([key, cellData]) => {
+            const [bar, cell, modelString] = key.split(':').map(Number);
+            // Only render cells that belong to the measures shown in this row.
+            const localBar = bar - rowStartBar;
+            if (localBar < 0 || localBar >= numMeasures) return null;
+            const globalCell = localBar * cellsPerBar + cell;
+            const x = getSubdivisionX(globalCell, cellsPerBar);
+            const row = NUM_STRINGS - 1 - modelString; // display row
+            const yPos = stringHeight * row + stringHeight / 2;
+            const displayValue = cellData.fret === 'x' ? 'x' : String(cellData.fret);
+            return (
+              <div
+                key={`tab-${key}`}
+                style={{
+                  position: 'absolute', width: 18, left: x - 9, top: yPos - 7, height: 14,
+                  display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11, fontWeight: 700, color: '#000',
+                    fontFamily: 'monospace', backgroundColor: paperColor, padding: '0 1px', lineHeight: 1,
+                  }}
+                >
+                  {displayValue}
+                </span>
+              </div>
+            );
+          })}
+
+        {/* INVISIBLE interactive 16th-note grid: one hit target per (cell, string) */}
+        {onCellClick &&
+          Array.from({ length: totalCells }, (_, globalCell) => {
+            const x = getSubdivisionX(globalCell, cellsPerBar);
+            const measureIndex = Math.floor(globalCell / cellsPerBar);
+            const measureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
+            const cellW = Math.max(6, (measureWidth - (measureIndex === 0 ? CLEF_RESERVE : 0)) / cellsPerBar);
+            const bar = rowStartBar + measureIndex;
+            const cell = globalCell % cellsPerBar;
+            return [0, 1, 2, 3, 4, 5].map((row) => {
+              const modelString = NUM_STRINGS - 1 - row;
+              const yPos = stringHeight * row + stringHeight / 2;
+              return (
+                <button
+                  key={`hit-${globalCell}-${row}`}
+                  onClick={(e) => onCellClick(bar, cell, modelString, (e.currentTarget as HTMLElement).getBoundingClientRect())}
+                  title=""
+                  style={{
+                    position: 'absolute',
+                    left: x - cellW / 2,
+                    top: yPos - stringHeight / 2,
+                    width: cellW,
+                    height: stringHeight,
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                />
+              );
+            });
+          })}
       </div>
     </div>
   );

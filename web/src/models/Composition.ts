@@ -5,7 +5,7 @@
 import { ChordProgression } from './Chord';
 import { TimeSignature, GuitarTuning } from './Note';
 import { NotationMeasure } from './Notation';
-import { TabMeasure } from './Tablature';
+import { TabMeasure, TabCell } from './Tablature';
 import type { SectionType } from './Lyrics';
 import { LyricSection } from './Lyrics';
 
@@ -48,6 +48,12 @@ export interface GlobalSettings {
 export interface PageData {
   barLyrics: string[];
   barBeatChords: string[][];
+  /**
+   * User-entered tab frets, stored sparsely keyed by "bar:cell:string"
+   * (bar 0-15, cell = 16th-note index in bar, string 0-5 low->high).
+   * Absent cells fall back to the chord-derived fret. Optional for back-compat.
+   */
+  barTab?: Record<string, TabCell>;
 }
 
 export interface CompositionPages {
