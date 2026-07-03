@@ -33,6 +33,11 @@ export const Tablature: React.FC<TablatureProps> = ({
   const firstMeasureWidth = numMeasures > 1 ? totalWidth / numMeasures + 40 : totalWidth;
   const otherMeasureWidth = numMeasures > 1 ? (totalWidth - firstMeasureWidth) / (numMeasures - 1) : 0;
 
+  // Space the staff reserves at the start of measure 1 for the clef + time
+  // signature. Offsetting the tab's first-measure beats by the same amount lines
+  // up the first chord's fret numbers with the first staff notes.
+  const CLEF_RESERVE = 40;
+
   const beatFingerings = beatChords.map((chordName) => {
     if (!chordName || chordName.trim() === '' || chordName === '-') {
       return null;
@@ -67,8 +72,16 @@ export const Tablature: React.FC<TablatureProps> = ({
     }
 
     const currentMeasureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
-    const beatWidth = currentMeasureWidth / 4;
 
+    // In measure 1 the staff pushes its first note past the clef/time-sig, so
+    // reserve the same space here and spread the 4 beats across the remainder.
+    if (measureIndex === 0) {
+      const usableWidth = currentMeasureWidth - CLEF_RESERVE;
+      const beatWidth = usableWidth / 4;
+      return measureStart + CLEF_RESERVE + beatWidth * beatWithinMeasure + beatWidth / 2;
+    }
+
+    const beatWidth = currentMeasureWidth / 4;
     return measureStart + beatWidth * beatWithinMeasure + beatWidth / 2;
   };
 
