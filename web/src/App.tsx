@@ -26,7 +26,20 @@ export const App: React.FC = () => {
             value={current}
             onChange={(_, v) => navigate(v)}
             textColor="inherit"
-            indicatorColor="secondary"
+            TabIndicatorProps={{ sx: { height: 3, bgcolor: '#fff' } }}
+            sx={{
+              '& .MuiTab-root': {
+                color: 'rgba(255,255,255,0.6)',
+                fontWeight: 500,
+                minHeight: 48,
+              },
+              '& .Mui-selected': {
+                color: '#fff',
+                fontWeight: 700,
+                bgcolor: 'rgba(255,255,255,0.16)',
+                borderRadius: 1,
+              },
+            }}
           >
             <Tab label="Compositions" value="/" />
             <Tab label="Editor" value="/editor" />

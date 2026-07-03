@@ -421,7 +421,7 @@ export const EditorScreen: React.FC = () => {
                                       cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center',
                                     }}
                                   >
-                                    <span style={{ fontSize: 10, fontWeight: chordName ? 'bold' : 'normal', color: chordName ? '#000' : '#ccc' }}>
+                                    <span style={{ fontSize: chordName ? 10 : 14, fontWeight: 'bold', color: chordName ? '#000' : '#1976d2' }}>
                                       {label}
                                     </span>
                                   </button>
