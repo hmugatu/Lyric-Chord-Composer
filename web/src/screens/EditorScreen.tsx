@@ -372,18 +372,19 @@ export const EditorScreen: React.FC = () => {
                 .flat();
 
               return (
-                <Box key={rowIndex}>
+                <Box key={rowIndex} sx={{ mb: 3 }}>
                   {/* Lyrics for the row */}
                   <Tooltip title="click here to add lyrics!" placement="top-start">
                     <input
-                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', outline: 'none', padding: 0, marginBottom: 2, minHeight: 20, fontSize: 10, color: '#333' }}
+                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', outline: 'none', padding: '2px 0', marginTop: 8, marginBottom: 8, minHeight: 34, fontSize: 22, color: '#333' }}
                       value={barLyrics[rowIndex * 4] || ''}
                       onChange={(e) => handleLyricsChange(rowIndex * 4, e.target.value)}
                     />
                   </Tooltip>
 
-                  {/* Chord boxes */}
-                  <Box sx={{ display: 'flex', flexDirection: 'row', mb: '5px', ml: '10px' }}>
+                  {/* Chord boxes — 10px left offset matches the tab/staff internal
+                      start x so chord names sit over their beats. */}
+                  <Box sx={{ display: 'flex', flexDirection: 'row', mb: '5px', pl: '10px' }}>
                     {[0, 1, 2, 3].map((colIndex) => {
                       const barIndex = rowIndex * 4 + colIndex;
                       const barWidth = colIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
@@ -415,15 +416,16 @@ export const EditorScreen: React.FC = () => {
                     })}
                   </Box>
 
-                  {/* Tablature */}
-                  <Box sx={{ p: '4px', bgcolor: '#fff', position: 'relative', overflow: 'hidden' }}>
+                  {/* Tablature — vertical padding only; horizontal padding would
+                      push the 900px-wide notation past the content edge. */}
+                  <Box sx={{ py: '4px', bgcolor: '#fff', position: 'relative', overflow: 'hidden' }}>
                     <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} />
                   </Box>
 
                   <Box sx={{ height: 2 }} />
 
                   {/* Staff */}
-                  <Box sx={{ p: '4px', bgcolor: '#fff', height: 160, position: 'relative', overflow: 'hidden' }}>
+                  <Box sx={{ py: '4px', bgcolor: '#fff', height: 160, position: 'relative', overflow: 'hidden' }}>
                     <StaffNotes beatChords={rowBeatChords} width={CONTENT_WIDTH} height={85} numMeasures={4} />
                   </Box>
                 </Box>
