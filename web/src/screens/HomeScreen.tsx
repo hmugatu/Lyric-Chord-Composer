@@ -8,6 +8,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useCompositionStore } from '../store/compositionStore';
 import { CompositionStorageService } from '../services/compositionService';
 import type { Composition } from '../models';
@@ -18,11 +19,15 @@ export const HomeScreen: React.FC = () => {
   const [errorDialog, setErrorDialog] = React.useState<string | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
 
+  const [pendingDelete, setPendingDelete] = React.useState<Composition | null>(null);
+
   const compositions = useCompositionStore((s) => s.compositions);
   const createComposition = useCompositionStore((s) => s.createComposition);
   const loadComposition = useCompositionStore((s) => s.loadComposition);
   const addComposition = useCompositionStore((s) => s.addComposition);
   const setCurrentComposition = useCompositionStore((s) => s.setCurrentComposition);
+  const deleteComposition = useCompositionStore((s) => s.deleteComposition);
+  const saveToCache = useCompositionStore((s) => s.saveToCache);
   const isLoading = useCompositionStore((s) => s.isLoading);
   const initializeStore = useCompositionStore((s) => s.initializeStore);
   const storageService = React.useMemo(() => new CompositionStorageService(), []);
@@ -39,6 +44,15 @@ export const HomeScreen: React.FC = () => {
   const handleOpen = (composition: Composition) => {
     loadComposition(composition.id);
     navigate('/editor');
+  };
+
+  const handleConfirmDelete = () => {
+    if (pendingDelete) {
+      deleteComposition(pendingDelete.id);
+      saveToCache();
+      setSnackbar({ open: true, message: `Deleted "${pendingDelete.title}"` });
+    }
+    setPendingDelete(null);
   };
 
   const handleImport = async () => {
@@ -101,8 +115,8 @@ export const HomeScreen: React.FC = () => {
       ) : (
         <Box sx={{ p: 2, pb: 10 }}>
           {compositions.map((item) => (
-            <Card key={item.id} sx={{ mb: 1.5 }}>
-              <CardActionArea onClick={() => handleOpen(item)}>
+            <Card key={item.id} sx={{ mb: 1.5, display: 'flex', alignItems: 'stretch' }}>
+              <CardActionArea onClick={() => handleOpen(item)} sx={{ flex: 1 }}>
                 <CardContent>
                   <Typography variant="h6">{item.title}</Typography>
                   {item.artist && <Typography variant="body2">{item.artist}</Typography>}
@@ -121,6 +135,17 @@ export const HomeScreen: React.FC = () => {
                   </Box>
                 </CardContent>
               </CardActionArea>
+              <Box sx={{ display: 'flex', alignItems: 'center', pr: 1 }}>
+                <Tooltip title="Delete composition">
+                  <IconButton
+                    aria-label={`Delete ${item.title}`}
+                    onClick={() => setPendingDelete(item)}
+                    sx={{ color: '#b00020' }}
+                  >
+                    <DeleteOutlineIcon />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Card>
           ))}
         </Box>
@@ -132,6 +157,20 @@ export const HomeScreen: React.FC = () => {
         onClose={() => setSnackbar({ open: false, message: '' })}
         message={snackbar.message}
       />
+
+      <Dialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}>
+        <DialogTitle>Delete composition?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Permanently remove "{pendingDelete?.title}" from your library? This can't be undone.
+            If you want to keep a copy, cancel and use Save to export it first.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDelete(null)}>Cancel</Button>
+          <Button color="error" onClick={handleConfirmDelete}>Delete</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={errorDialog !== null} onClose={() => setErrorDialog(null)}>
         <DialogTitle>Import Failed</DialogTitle>
