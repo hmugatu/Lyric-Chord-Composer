@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { shortChordName } from '../utils/chordName';
 
 export interface ChordData {
   name: string;
@@ -16,15 +17,15 @@ export interface ChordData {
 
 const box = (s: React.CSSProperties): React.CSSProperties => s;
 
-export const MiniChordDiagram: React.FC<{ chord: ChordData }> = ({ chord }) => {
+export const MiniChordDiagram: React.FC<{ chord: ChordData; background?: string }> = ({ chord, background = '#fff' }) => {
   const fingeringNums = chord.fingering.map((f) => (f === 'x' ? null : parseInt(f, 10)));
 
   return (
     <div
       style={box({
-        backgroundColor: '#fff',
+        backgroundColor: background,
         padding: 6,
-        border: '1px solid #ddd',
+        border: '1px solid #cbb98f',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -32,8 +33,7 @@ export const MiniChordDiagram: React.FC<{ chord: ChordData }> = ({ chord }) => {
       })}
     >
       <div style={{ fontSize: 9, fontWeight: 'bold', color: '#000', marginBottom: 4, textAlign: 'center' }}>
-        {chord.name}
-        {chord.startingFret > 1 && ` ${chord.startingFret}fr`}
+        {shortChordName(chord.name, chord.startingFret)}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

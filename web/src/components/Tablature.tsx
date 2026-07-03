@@ -20,6 +20,7 @@ interface TablatureProps {
   width: number;
   height?: number;
   numMeasures?: number;
+  paperColor?: string;
 }
 
 export const Tablature: React.FC<TablatureProps> = ({
@@ -28,6 +29,7 @@ export const Tablature: React.FC<TablatureProps> = ({
   width,
   height = 60,
   numMeasures = 4,
+  paperColor = '#fff',
 }) => {
   const totalWidth = width - 20;
   const firstMeasureWidth = numMeasures > 1 ? totalWidth / numMeasures + 40 : totalWidth;
@@ -86,7 +88,7 @@ export const Tablature: React.FC<TablatureProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', backgroundColor: '#fff', marginTop: 4, width, height }}>
+    <div style={{ display: 'flex', flexDirection: 'row', backgroundColor: paperColor, marginTop: 4, width, height }}>
       <div style={{ flex: 1, position: 'relative' }}>
         {/* Horizontal string lines */}
         {[0, 1, 2, 3, 4, 5].map((stringIndex) => (
@@ -143,7 +145,7 @@ export const Tablature: React.FC<TablatureProps> = ({
                         fontWeight: 'bold',
                         color: '#000',
                         fontFamily: 'monospace',
-                        backgroundColor: '#fff',
+                        backgroundColor: paperColor,
                         padding: '0 1px',
                         lineHeight: 1,
                       }}

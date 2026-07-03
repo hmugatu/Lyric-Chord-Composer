@@ -72,11 +72,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <Box sx={{ position: 'relative', minHeight: '100%', bgcolor: '#f5f5f5' }}>
+    <Box sx={{ position: 'relative', minHeight: '100%', bgcolor: 'background.default' }}>
       <Box
         sx={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          px: 2, py: 1.5, borderBottom: '1px solid #e0e0e0', bgcolor: '#fff',
+          px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper',
         }}
       >
         <Box>
@@ -89,13 +89,14 @@ export const HomeScreen: React.FC = () => {
           <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreateNew}>
             New
           </Button>
-          <Tooltip title="Import .hmlcc file">
-            <span>
-              <IconButton color="primary" onClick={handleImport} disabled={isImporting}>
-                <FolderOpenIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
+          <Button
+            variant="contained"
+            startIcon={<FolderOpenIcon />}
+            onClick={handleImport}
+            disabled={isImporting}
+          >
+            Import
+          </Button>
         </Box>
       </Box>
 

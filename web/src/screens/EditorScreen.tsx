@@ -16,6 +16,7 @@ import { PrintDialog } from '../components/PrintDialog';
 import { StaffNotes } from '../components/StaffNotes';
 import { Tablature } from '../components/Tablature';
 import { ChordDiagram, MiniChordDiagram, ChordData } from '../components/ChordDiagram';
+import { shortChordName } from '../utils/chordName';
 import chordsDataJson from '../data/chords.json';
 
 interface PageState {
@@ -33,6 +34,10 @@ const PAPER_WIDTH = 1000;
 const PAPER_HEIGHT = 1100;
 const PAPER_MARGIN = 50;
 const CONTENT_WIDTH = PAPER_WIDTH - PAPER_MARGIN * 2;
+
+// Aged parchment tone for the sheet-music paper (and the notation backgrounds
+// that must blend into it), for a warm "old manuscript" look in any theme.
+const PAPER_COLOR = '#f4ecd8';
 
 const totalMeasureWidth = CONTENT_WIDTH - 20;
 const firstMeasureWidth = totalMeasureWidth / 4 + 40;
@@ -278,11 +283,11 @@ export const EditorScreen: React.FC = () => {
     .filter((c): c is ChordData => c !== undefined);
 
   return (
-    <Box sx={{ bgcolor: '#fafafa', minHeight: '100%' }}>
+    <Box sx={{ bgcolor: 'background.default', minHeight: '100%' }}>
       {/* Header */}
-      <Box sx={{ p: 2, bgcolor: '#fff', borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ p: 2, bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <input
-          style={{ fontSize: 20, fontWeight: 600, color: '#333', flex: 1, border: 'none', outline: 'none', padding: '4px 8px', marginRight: 16 }}
+          style={{ fontSize: 20, fontWeight: 600, color: 'currentColor', background: 'transparent', flex: 1, border: 'none', outline: 'none', padding: '4px 8px', marginRight: 16 }}
           value={currentComposition.title}
           onChange={(e) => updateComposition({ title: e.target.value })}
           placeholder="Untitled Song"
@@ -304,7 +309,7 @@ export const EditorScreen: React.FC = () => {
       </Box>
 
       {/* Page navigation */}
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, borderBottom: '1px solid #ddd', bgcolor: '#f5f5f5' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
         <Button
           variant="outlined"
           disabled={currentPage === 0}
@@ -337,19 +342,30 @@ export const EditorScreen: React.FC = () => {
       <Box sx={{ overflowX: 'auto', display: 'flex', justifyContent: 'center', p: 2 }}>
         <Box
           sx={{
-            width: PAPER_WIDTH, minHeight: PAPER_HEIGHT, bgcolor: '#fff',
+            width: PAPER_WIDTH, minHeight: PAPER_HEIGHT, bgcolor: PAPER_COLOR, color: '#333',
             border: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', my: 2,
           }}
         >
           {currentPage === 0 && (
             <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, py: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <input
-                style={{ fontSize: 20, fontWeight: 600, color: '#333', border: 'none', outline: 'none', flex: 1 }}
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: '#333',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: '1px solid #cbb98f',
+                  outline: 'none',
+                  flex: 1,
+                  padding: '4px 8px',
+                  marginRight: 32,
+                }}
                 value={currentComposition.title}
                 onChange={(e) => updateComposition({ title: e.target.value })}
                 placeholder="Untitled Song"
               />
-              <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                 <Typography variant="caption"><b>Key:</b> {currentComposition.globalSettings.key}</Typography>
                 <Typography variant="caption"><b>Tempo:</b> ♩ = {currentComposition.globalSettings.tempo}</Typography>
                 <Typography variant="caption"><b>Capo:</b> {currentComposition.globalSettings.capo || 'None'}</Typography>
@@ -360,7 +376,7 @@ export const EditorScreen: React.FC = () => {
           {currentPage === 0 && uniqueChords.length > 0 && (
             <Box sx={{ px: 2, py: 1.5, display: 'flex', gap: 1.5, overflowX: 'auto' }}>
               {uniqueChords.map((chord, index) => (
-                <MiniChordDiagram key={index} chord={chord} />
+                <MiniChordDiagram key={index} chord={chord} background={PAPER_COLOR} />
               ))}
             </Box>
           )}
@@ -394,17 +410,19 @@ export const EditorScreen: React.FC = () => {
                           <Box sx={{ display: 'flex', flexDirection: 'row' }}>
                             {[0, 1, 2, 3].map((beatIndex) => {
                               const chordName = barBeatChords[barIndex][beatIndex];
+                              const chord = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
+                              const label = chordName ? shortChordName(chordName, chord?.startingFret) : '+';
                               return (
-                                <Tooltip key={beatIndex} title={!chordName ? 'click to add chord' : ''}>
+                                <Tooltip key={beatIndex} title={!chordName ? 'click to add chord' : chordName}>
                                   <button
                                     onClick={() => openChordSelector(barIndex, beatIndex)}
                                     style={{
-                                      width: beatWidth, height: 24, background: '#fff', border: 'none',
+                                      width: beatWidth, height: 24, background: 'transparent', border: 'none',
                                       cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center',
                                     }}
                                   >
                                     <span style={{ fontSize: 10, fontWeight: chordName ? 'bold' : 'normal', color: chordName ? '#000' : '#ccc' }}>
-                                      {chordName || '+'}
+                                      {label}
                                     </span>
                                   </button>
                                 </Tooltip>
@@ -418,14 +436,14 @@ export const EditorScreen: React.FC = () => {
 
                   {/* Tablature — vertical padding only; horizontal padding would
                       push the 900px-wide notation past the content edge. */}
-                  <Box sx={{ py: '4px', bgcolor: '#fff', position: 'relative', overflow: 'hidden' }}>
-                    <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} />
+                  <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, position: 'relative', overflow: 'hidden' }}>
+                    <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} paperColor={PAPER_COLOR} />
                   </Box>
 
                   <Box sx={{ height: 2 }} />
 
                   {/* Staff */}
-                  <Box sx={{ py: '4px', bgcolor: '#fff', height: 160, position: 'relative', overflow: 'hidden' }}>
+                  <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, height: 160, position: 'relative', overflow: 'hidden' }}>
                     <StaffNotes beatChords={rowBeatChords} width={CONTENT_WIDTH} height={85} numMeasures={4} />
                   </Box>
                 </Box>
@@ -452,7 +470,7 @@ export const EditorScreen: React.FC = () => {
                 sx={{ mb: 1, mt: 1 }}
                 InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
               />
-              <Box sx={{ border: '1px solid #ddd', borderRadius: 1, flex: 1, overflowY: 'auto', maxHeight: 420 }}>
+              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, flex: 1, overflowY: 'auto', maxHeight: 420 }}>
                 {filteredChords.map((item) => {
                   const selected = selectedChordData?.name === item;
                   return (
@@ -463,11 +481,14 @@ export const EditorScreen: React.FC = () => {
                         if (detail) setSelectedChordData(detail);
                       }}
                       sx={{
-                        py: 1, px: 1, cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
-                        bgcolor: selected ? '#e3f2fd' : 'transparent',
-                        borderLeft: selected ? '4px solid #1976d2' : '4px solid transparent',
+                        py: 1, px: 1, cursor: 'pointer',
+                        borderBottom: '1px solid', borderBottomColor: 'divider',
+                        bgcolor: selected ? 'action.selected' : 'transparent',
+                        borderLeft: selected ? '4px solid' : '4px solid transparent',
+                        borderLeftColor: selected ? 'info.main' : 'transparent',
                         fontWeight: selected ? 700 : 500, fontSize: 13,
-                        color: selected ? '#1976d2' : '#333',
+                        color: selected ? 'info.main' : 'text.primary',
+                        '&:hover': { bgcolor: 'action.hover' },
                       }}
                     >
                       {item}
@@ -483,7 +504,7 @@ export const EditorScreen: React.FC = () => {
                 <>
                   <ChordDiagram chord={selectedChordData} />
                   <Box sx={{ bgcolor: '#f5f5f5', borderRadius: 1, p: 1.5, borderLeft: '4px solid #1976d2', width: '100%' }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#1976d2', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#1976d2', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
                       How to Play:
                     </Typography>
                     <Typography variant="body2" sx={{ fontStyle: 'italic', color: '#333' }}>
@@ -501,9 +522,9 @@ export const EditorScreen: React.FC = () => {
         </DialogContent>
         <DialogActions>
           {selectedChordData && (
-            <Button variant="contained" onClick={() => selectChord(selectedChordData.name)}>Select</Button>
+            <Button variant="contained" color="info" onClick={() => selectChord(selectedChordData.name)}>Select</Button>
           )}
-          <Button onClick={() => {
+          <Button color="inherit" onClick={() => {
             if (selectedBarIndex !== null && selectedBeatIndex !== null) {
               handleBeatChordChange(selectedBarIndex, selectedBeatIndex, '');
             }
@@ -511,7 +532,7 @@ export const EditorScreen: React.FC = () => {
             setChordSearchText('');
             setSelectedChordData(null);
           }}>Clear</Button>
-          <Button onClick={() => {
+          <Button color="inherit" onClick={() => {
             setShowChordModal(false);
             setChordSearchText('');
             setSelectedChordData(null);
