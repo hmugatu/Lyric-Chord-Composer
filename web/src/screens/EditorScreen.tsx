@@ -228,8 +228,10 @@ export const EditorScreen: React.FC = () => {
         updatedAt: new Date(),
       };
       await storageService.setProvider('local');
-      await storageService.exportComposition(compositionToSave);
-      setSnackbar({ open: true, message: `Saved as ${compositionToSave.title}.hmlcc` });
+      const saved = await storageService.exportComposition(compositionToSave);
+      if (saved) {
+        setSnackbar({ open: true, message: `Saved as ${compositionToSave.title}.hmlcc` });
+      }
     } catch (error) {
       setSnackbar({ open: true, message: `Failed to save: ${error instanceof Error ? error.message : 'error'}` });
     } finally {

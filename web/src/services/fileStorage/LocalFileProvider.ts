@@ -6,9 +6,38 @@
 import type { ExportOptions, ImportResult, StorageProvider, FileMetadata } from './types';
 
 export class LocalFileProvider implements StorageProvider {
-  async exportFile(options: ExportOptions): Promise<void> {
+  /** Returns true if a file was written, false if the user cancelled the Save dialog. */
+  async exportFile(options: ExportOptions): Promise<boolean> {
     const { filename, content, mimeType = 'application/x-hmlcc' } = options;
     const finalFilename = filename.endsWith('.hmlcc') ? filename : `${filename}.hmlcc`;
+
+    // Prefer a real "Save As" dialog where supported (Chrome/Edge). Falls back
+    // to a normal download in browsers without the File System Access API.
+    const picker = (window as any).showSaveFilePicker;
+    if (typeof picker === 'function') {
+      try {
+        const handle = await picker({
+          suggestedName: finalFilename,
+          types: [
+            {
+              description: 'Lyric Chord Composition',
+              accept: { [mimeType]: ['.hmlcc'] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+      } catch (error) {
+        // User cancelled the picker — treat as a no-op.
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return false;
+        }
+        console.error('Save picker failed, falling back to download:', error);
+        // fall through to the anchor-download path below
+      }
+    }
 
     try {
       const blob = new Blob([content], { type: mimeType });
@@ -20,6 +49,7 @@ export class LocalFileProvider implements StorageProvider {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+      return true;
     } catch (error) {
       console.error('Export error:', error);
       throw new Error(`Failed to export file: ${error instanceof Error ? error.message : 'Unknown error'}`);

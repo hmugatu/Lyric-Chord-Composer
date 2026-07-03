@@ -24,10 +24,11 @@ export class CompositionStorageService {
     }
   }
 
-  async exportComposition(composition: Composition): Promise<void> {
+  /** Returns true if a file was written, false if the user cancelled the Save dialog. */
+  async exportComposition(composition: Composition): Promise<boolean> {
     const filename = this.generateFilename(composition);
     const content = this.serializeComposition(composition);
-    await this.localProvider.exportFile({
+    return this.localProvider.exportFile({
       filename,
       content,
       mimeType: 'application/x-hmlcc',
