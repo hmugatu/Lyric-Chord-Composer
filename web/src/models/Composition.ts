@@ -9,23 +9,35 @@ import { TabMeasure } from './Tablature';
 import type { SectionType } from './Lyrics';
 import { LyricSection } from './Lyrics';
 
+/** Optional per-section performance controls (overrides for a single section). */
+export interface SectionFlowControl {
+  /** If set, overrides GlobalSettings.tempo for this section. */
+  tempo?: number;
+  /** Free-form note for the composer (e.g. "build here", "tempo shift"). */
+  sectionNotes?: string;
+}
+
 export interface Section {
   id: string;
   type: SectionType;
   label?: string;
+  order: number; // Section ordering
 
-  // Can contain any combination
-  notation?: NotationMeasure[];
-  tablature?: TabMeasure[];
+  // Core content
   lyrics?: LyricSection;
   chordProgression?: ChordProgression;
 
-  order: number;  // Section ordering
+  // Visual / musical content (optional; can contain any combination)
+  notation?: NotationMeasure[];
+  tablature?: TabMeasure[];
+
+  // Optional performance controls specific to this section
+  flowControl?: SectionFlowControl;
 }
 
 export interface GlobalSettings {
   key: string;
-  tempo: number;
+  tempo: number; // Base tempo for the whole song
   timeSignature: TimeSignature;
   capo?: number;
   tuning: GuitarTuning;
@@ -53,6 +65,6 @@ export interface Composition {
 
   // Metadata
   tags?: string[];
-  difficulty?: "beginner" | "intermediate" | "advanced";
+  difficulty?: 'beginner' | 'intermediate' | 'advanced';
   notes?: string; // Stores JSON with pages structure { pages: PageData[] }
 }
