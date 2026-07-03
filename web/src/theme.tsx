@@ -60,7 +60,7 @@ export const AppThemeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       createTheme({
         palette: {
           mode,
-          primary: { main: '#6200ee' },
+          primary: { main: '#1976d2' },
         },
       }),
     [mode]

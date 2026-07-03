@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="12" fill="#6200ee"/>
+  <rect width="64" height="64" rx="12" fill="#1976d2"/>
   <g stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
     <!-- guitar body (figure-8) -->
     <path d="M40 30
