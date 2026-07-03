@@ -37,13 +37,33 @@ export class PrintService {
       throw new Error('Failed to open print window. Please allow pop-ups for this site.');
     }
 
+    printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
 
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
+    // Trigger printing once the document is ready. We don't rely on `onload`
+    // alone: after document.write the window may already be loaded, so the
+    // handler would never fire. Fire on load if it's still pending, otherwise
+    // fall back to a short timeout so SVG/layout has a frame to settle.
+    const triggerPrint = () => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch (e) {
+        console.error('Print failed:', e);
+      } finally {
+        // Give the print dialog a moment before closing the window.
+        setTimeout(() => printWindow.close(), 500);
+      }
     };
+
+    if (printWindow.document.readyState === 'complete') {
+      setTimeout(triggerPrint, 250);
+    } else {
+      printWindow.onload = () => setTimeout(triggerPrint, 250);
+      // Safety net in case onload never fires.
+      setTimeout(triggerPrint, 800);
+    }
   }
 }
 

@@ -184,10 +184,11 @@ function generatePrintStyles(options: PrintOptions): string {
       margin-top: 0.2in;
     }
 
-    /* Sheet Page - Natural flow, no fixed height */
+    /* Sheet Page - Natural flow, no fixed height.
+       Do NOT avoid page-break-inside here: forcing the whole page block to stay
+       together pushes all content off page 1, leaving it blank. Let rows flow. */
     .sheet-page {
       margin-bottom: 0.3in;
-      page-break-inside: avoid;
     }
 
     .page-header {
@@ -469,13 +470,16 @@ function generatePageHtml(
       if (!isEmpty) rowHasContent = true;
     }
 
-    // Generate row-spanning staff notation (once per row)
-    // Always generate to show structure even for empty bars
-    const notesSvg = options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70) : '';
+    // Only render the staff/tab systems for rows that actually have content.
+    // Empty rows would otherwise print full-height blank staves and waste pages.
+    const renderSystems = rowHasContent;
+    const notesSvg = renderSystems && options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70) : '';
+    const tabSvg = renderSystems && options.includeTablature ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55) : '';
 
-    // Generate row-spanning tablature (once per row)
-    // Always generate to show structure even for empty bars
-    const tabSvg = options.includeTablature ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55) : '';
+    // Skip empty rows entirely (no chords and no lyrics anywhere in the row).
+    if (!rowHasContent) {
+      continue;
+    }
 
     let rowHtml = `
       <div class="bar-row">
