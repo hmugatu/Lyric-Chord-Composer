@@ -40,7 +40,28 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
     steps:
+      # deploy-pages intermittently reports "Deployment failed, try again
+      # later" straight from GitHub's Pages backend even on a valid artifact
+      # (actions/deploy-pages#406, #418). Give it more patience, and if the
+      # first attempt still fails, make a second fresh attempt in the same job.
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+        with:
+          timeout: 1200000   # 20 min (default 10)
+          error_count: 30    # tolerate more transient status errors (default 10)
+          reporting_interval: 5000
+
+      - name: Wait before retrying
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
+          error_count: 30
+          reporting_interval: 5000
