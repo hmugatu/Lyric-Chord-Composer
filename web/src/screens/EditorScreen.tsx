@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, IconButton, Tooltip, Typography, TextField, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, InputAdornment, Snackbar,
+  ToggleButton, ToggleButtonGroup, MenuItem,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -24,9 +25,9 @@ interface PageState {
   barBeatChords: string[][];
 }
 
-const emptyPage = (): PageState => ({
+const emptyPage = (slots = 4): PageState => ({
   barLyrics: Array(16).fill(''),
-  barBeatChords: Array(16).fill(null).map(() => Array(4).fill('')),
+  barBeatChords: Array(16).fill(null).map(() => Array(slots).fill('')),
 });
 
 // Fixed paper dimensions: 1000px = 8.5", 1100px = 11" (100px per inch)
@@ -39,9 +40,26 @@ const CONTENT_WIDTH = PAPER_WIDTH - PAPER_MARGIN * 2;
 // that must blend into it), for a warm "old manuscript" look in any theme.
 const PAPER_COLOR = '#f4ecd8';
 
+// Common keys for the Key dropdown (majors then relative minors).
+const KEY_OPTIONS = [
+  'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#',
+  'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb',
+  'Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'A#m',
+  'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm', 'Abm',
+];
+
+// Common time-signature values.
+const BEATS_OPTIONS = [2, 3, 4, 5, 6, 7, 9, 12];
+const BEAT_VALUE_OPTIONS = [2, 4, 8, 16];
+
 const totalMeasureWidth = CONTENT_WIDTH - 20;
 const firstMeasureWidth = totalMeasureWidth / 4 + 40;
 const otherMeasureWidth = (totalMeasureWidth - firstMeasureWidth) / 3;
+
+// Clef + time-signature space reserved at the start of measure 1. Must match
+// CLEF_RESERVE in Tablature.tsx and the clef width in StaffNotes so the chord
+// boxes, tab fret numbers, and staff notes all line up vertically.
+const CLEF_RESERVE = 40;
 
 export const EditorScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -72,6 +90,9 @@ export const EditorScreen: React.FC = () => {
   const [beats, setBeats] = React.useState('');
   const [beatValue, setBeatValue] = React.useState('');
   const [tuningName, setTuningName] = React.useState('');
+  // Chords-per-bar is edited as a pending value in Settings and only committed
+  // (re-slicing bars) on Save, so Cancel restores the previous value.
+  const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(4);
 
   const [currentPage, setCurrentPage] = React.useState(0);
   const [allPages, setAllPages] = React.useState<PageState[]>([emptyPage()]);
@@ -81,8 +102,10 @@ export const EditorScreen: React.FC = () => {
   const [chordSearchText, setChordSearchText] = React.useState('');
   const [selectedChordData, setSelectedChordData] = React.useState<ChordData | null>(null);
 
+  const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
+
   const barLyrics = allPages[currentPage]?.barLyrics || Array(16).fill('');
-  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(16).fill(null).map(() => Array(4).fill(''));
+  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(16).fill(null).map(() => Array(chordsPerBar).fill(''));
 
   // Persist the given pages array into the composition notes blob.
   const persistPages = (pages: PageState[]) => {
@@ -104,6 +127,32 @@ export const EditorScreen: React.FC = () => {
     newPages[currentPage] = { ...newPages[currentPage], barBeatChords: newChords };
     setAllPages(newPages);
     persistPages(newPages);
+  };
+
+  // Re-slice a bar's chord slots to a new count, keeping existing chords at
+  // their proportional positions (e.g. 4->8 keeps chords on the down-beats).
+  const resliceBar = (bar: string[], from: number, to: number): string[] => {
+    const out = Array(to).fill('');
+    for (let i = 0; i < bar.length && i < from; i++) {
+      if (bar[i] && bar[i].trim() !== '') {
+        const newIndex = Math.round((i / from) * to);
+        if (newIndex < to) out[newIndex] = bar[i];
+      }
+    }
+    return out;
+  };
+
+  const handleChordsPerBarChange = (next: number) => {
+    if (!currentComposition || next === chordsPerBar) return;
+    const remapped: PageState[] = allPages.map((page) => ({
+      barLyrics: page.barLyrics,
+      barBeatChords: page.barBeatChords.map((bar) => resliceBar(bar, chordsPerBar, next)),
+    }));
+    setAllPages(remapped);
+    updateGlobalSettings({ chordsPerBar: next });
+    // Persist both the settings change and the re-sliced pages.
+    updateComposition({ notes: JSON.stringify({ pages: remapped }) });
+    saveToCache();
   };
 
   // Load settings + bar data when the active composition changes.
@@ -131,11 +180,11 @@ export const EditorScreen: React.FC = () => {
           setCurrentPage(0);
         }
       } catch {
-        setAllPages([emptyPage()]);
+        setAllPages([emptyPage(chordsPerBar)]);
         setCurrentPage(0);
       }
     } else {
-      setAllPages([emptyPage()]);
+      setAllPages([emptyPage(chordsPerBar)]);
       setCurrentPage(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,6 +255,12 @@ export const EditorScreen: React.FC = () => {
     startNewComposition();
   };
 
+  // Open Settings, seeding the pending chords-per-bar from the current value.
+  const openSettings = () => {
+    setPendingChordsPerBar(chordsPerBar);
+    setShowSettingsDialog(true);
+  };
+
   const handleSettingsSave = () => {
     if (!currentComposition) return;
     updateGlobalSettings({
@@ -215,6 +270,10 @@ export const EditorScreen: React.FC = () => {
       timeSignature: { beats: parseInt(beats) || 4, beatValue: parseInt(beatValue) || 4 },
       tuning: { ...currentComposition.globalSettings.tuning, name: tuningName || 'Standard' },
     });
+    // Commit the chords-per-bar change (re-slices bars) only on Save.
+    if (pendingChordsPerBar !== chordsPerBar) {
+      handleChordsPerBarChange(pendingChordsPerBar);
+    }
     saveToCache();
     setShowSettingsDialog(false);
     setSnackbar({ open: true, message: 'Settings saved' });
@@ -300,7 +359,7 @@ export const EditorScreen: React.FC = () => {
             <span><IconButton onClick={() => setShowPrintDialog(true)} disabled={isPrinting}><PrintIcon /></IconButton></span>
           </Tooltip>
           <Tooltip title="Settings">
-            <IconButton onClick={() => setShowSettingsDialog(true)}><SettingsIcon /></IconButton>
+            <IconButton onClick={openSettings}><SettingsIcon /></IconButton>
           </Tooltip>
           <Tooltip title="Save .hmlcc">
             <span><IconButton color="primary" onClick={handleSave} disabled={isSaving}><SaveIcon /></IconButton></span>
@@ -327,7 +386,7 @@ export const EditorScreen: React.FC = () => {
             if (currentPage < allPages.length - 1) {
               setCurrentPage(currentPage + 1);
             } else {
-              const newPages = [...allPages, emptyPage()];
+              const newPages = [...allPages, emptyPage(chordsPerBar)];
               setAllPages(newPages);
               persistPages(newPages);
               setCurrentPage(allPages.length);
@@ -383,8 +442,9 @@ export const EditorScreen: React.FC = () => {
 
           <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, py: 3 }}>
             {[0, 1, 2, 3].map((rowIndex) => {
+              const emptyBar = Array(chordsPerBar).fill('');
               const rowBeatChords = [0, 1, 2, 3]
-                .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || ['', '', '', ''])
+                .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || emptyBar)
                 .flat();
 
               return (
@@ -404,12 +464,17 @@ export const EditorScreen: React.FC = () => {
                     {[0, 1, 2, 3].map((colIndex) => {
                       const barIndex = rowIndex * 4 + colIndex;
                       const barWidth = colIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
-                      const beatWidth = barWidth / 4;
+                      // Measure 1 reserves clef/time-sig space so its chord names
+                      // line up with the tab/staff, which do the same.
+                      const reserve = colIndex === 0 ? CLEF_RESERVE : 0;
+                      const beatWidth = (barWidth - reserve) / chordsPerBar;
+                      const barSlots = barBeatChords[barIndex] || emptyBar;
                       return (
                         <Box key={colIndex} sx={{ width: barWidth }}>
                           <Box sx={{ display: 'flex', flexDirection: 'row' }}>
-                            {[0, 1, 2, 3].map((beatIndex) => {
-                              const chordName = barBeatChords[barIndex][beatIndex];
+                            {reserve > 0 && <Box sx={{ width: reserve, flexShrink: 0 }} />}
+                            {Array.from({ length: chordsPerBar }, (_, beatIndex) => {
+                              const chordName = barSlots[beatIndex] || '';
                               const chord = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
                               const label = chordName ? shortChordName(chordName, chord?.startingFret) : '+';
                               return (
@@ -437,14 +502,14 @@ export const EditorScreen: React.FC = () => {
                   {/* Tablature — vertical padding only; horizontal padding would
                       push the 900px-wide notation past the content edge. */}
                   <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, position: 'relative', overflow: 'hidden' }}>
-                    <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} paperColor={PAPER_COLOR} />
+                    <Tablature beatChords={rowBeatChords} chordsData={chordsData} width={CONTENT_WIDTH} height={65} numMeasures={4} beatsPerBar={chordsPerBar} paperColor={PAPER_COLOR} />
                   </Box>
 
                   <Box sx={{ height: 2 }} />
 
                   {/* Staff */}
                   <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, height: 160, position: 'relative', overflow: 'hidden' }}>
-                    <StaffNotes beatChords={rowBeatChords} width={CONTENT_WIDTH} height={85} numMeasures={4} />
+                    <StaffNotes beatChords={rowBeatChords} width={CONTENT_WIDTH} height={85} numMeasures={4} beatsPerBar={chordsPerBar} />
                   </Box>
                 </Box>
               );
@@ -545,19 +610,68 @@ export const EditorScreen: React.FC = () => {
         <DialogTitle>Composition Settings</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1, minWidth: 320 }}>
-            <TextField label="Key" value={key} onChange={(e) => setKey(e.target.value)} size="small" placeholder="e.g., C, G, D" />
-            <TextField label="Tempo (BPM)" value={tempo} onChange={(e) => setTempo(e.target.value)} size="small" placeholder="120" />
-            <TextField label="Capo" value={capo} onChange={(e) => setCapo(e.target.value)} size="small" placeholder="0" />
+            <TextField select label="Key" value={key || 'C'} onChange={(e) => setKey(e.target.value)} size="small">
+              {KEY_OPTIONS.map((k) => (
+                <MenuItem key={k} value={k}>{k}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Tempo (BPM)"
+              value={tempo}
+              onChange={(e) => setTempo(e.target.value)}
+              size="small"
+              placeholder="120"
+              inputProps={{ min: 20, max: 400, step: 1 }}
+            />
+            <TextField
+              type="number"
+              label="Capo"
+              value={capo}
+              onChange={(e) => {
+                const n = Math.max(0, Math.min(12, parseInt(e.target.value) || 0));
+                setCapo(String(n));
+              }}
+              size="small"
+              placeholder="0"
+              inputProps={{ min: 0, max: 12, step: 1 }}
+            />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <TextField label="Beats" value={beats} onChange={(e) => setBeats(e.target.value)} size="small" sx={{ flex: 1 }} placeholder="4" />
+              <TextField select label="Beats" value={parseInt(beats) || 4} onChange={(e) => setBeats(String(e.target.value))} size="small" sx={{ flex: 1 }}>
+                {BEATS_OPTIONS.map((b) => (
+                  <MenuItem key={b} value={b}>{b}</MenuItem>
+                ))}
+              </TextField>
               <Typography sx={{ fontSize: 20, fontWeight: 'bold' }}>/</Typography>
-              <TextField label="Beat Value" value={beatValue} onChange={(e) => setBeatValue(e.target.value)} size="small" sx={{ flex: 1 }} placeholder="4" />
+              <TextField select label="Beat Value" value={parseInt(beatValue) || 4} onChange={(e) => setBeatValue(String(e.target.value))} size="small" sx={{ flex: 1 }}>
+                {BEAT_VALUE_OPTIONS.map((b) => (
+                  <MenuItem key={b} value={b}>{b}</MenuItem>
+                ))}
+              </TextField>
             </Box>
             <TextField label="Tuning" value={tuningName} onChange={(e) => setTuningName(e.target.value)} size="small" placeholder="e.g., Standard, Drop D" />
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
+                <Typography variant="body2">Chords per bar</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Slots each bar is divided into
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={pendingChordsPerBar}
+                onChange={(_, v) => v && setPendingChordsPerBar(v)}
+              >
+                <ToggleButton value={2}>2</ToggleButton>
+                <ToggleButton value={4}>4</ToggleButton>
+                <ToggleButton value={8}>8</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowSettingsDialog(false)}>Cancel</Button>
+          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setShowSettingsDialog(false); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSettingsSave}>Save</Button>
         </DialogActions>
       </Dialog>

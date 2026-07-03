@@ -12,8 +12,21 @@ interface StaffNotesProps {
   width: number;
   height: number;
   numMeasures?: number;
+  beatsPerBar?: number;
   scale?: number;
 }
+
+// Base note duration for a single chord filling one slot, by slots-per-bar.
+// 2 -> half, 4 -> quarter, 8 -> eighth (all divide 4/4 cleanly).
+const BASE_DURATION: { [slots: number]: string } = { 2: 'h', 4: 'q', 8: '8' };
+
+// Duration for a chord that spans `span` consecutive slots, per slots-per-bar.
+// Keys are (span - 1). Only combinations that map to a single notatable value.
+const SPAN_DURATION: { [slots: number]: { [k: number]: string } } = {
+  2: { 0: 'h', 1: 'w' }, // half, then whole
+  4: { 0: 'q', 1: 'h', 2: 'hd', 3: 'w' }, // quarter, half, dotted-half, whole
+  8: { 0: '8', 1: 'q', 3: 'h', 7: 'w' }, // eighth, quarter, half, whole (clean divisions)
+};
 
 function getChordNotesVexFlow(chordName: string): string[] {
   if (!chordName || chordName.trim() === '' || chordName === '-') {
@@ -84,6 +97,7 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
   width,
   height,
   numMeasures = 1,
+  beatsPerBar = 4,
   scale = 0.75,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -133,33 +147,37 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
           stave.setContext(context).draw();
 
           const notes: any[] = [];
-          const startBeat = m * 4;
+          const startBeat = m * beatsPerBar;
 
-          const noteDurations: { [key: number]: string } = { 0: 'q', 1: 'h', 2: 'hd', 3: 'w' };
+          const baseDuration = BASE_DURATION[beatsPerBar] || 'q';
+          const spanMap = SPAN_DURATION[beatsPerBar] || SPAN_DURATION[4];
 
           const processedBeats = new Set<number>();
 
-          for (let b = 0; b < 4; b++) {
+          for (let b = 0; b < beatsPerBar; b++) {
             if (processedBeats.has(b)) continue;
 
             const beatIndex = startBeat + b;
             const chord = beatChords[beatIndex] || '';
             const chordNotes = getChordNotesVexFlow(chord);
 
+            // Count consecutive empty slots after this one (how long the chord rings).
             let emptyCount = 0;
-            for (let c = b + 1; c < 4; c++) {
-              const nextBeatIndex = startBeat + c;
-              const nextChord = beatChords[nextBeatIndex] || '';
+            for (let c = b + 1; c < beatsPerBar; c++) {
+              const nextChord = beatChords[startBeat + c] || '';
               if (!nextChord || nextChord.trim() === '' || nextChord === '-') {
                 emptyCount++;
               } else {
                 break;
               }
             }
-            emptyCount = Math.min(emptyCount, 3);
 
             if (chordNotes.length > 0) {
-              const duration = noteDurations[emptyCount];
+              // Use a spanning duration when the run maps to a clean note value;
+              // otherwise emit one base-duration note and let the trailing empty
+              // slots become ghost notes so the measure still sums correctly.
+              const spanDuration = spanMap[emptyCount];
+              const duration = spanDuration || baseDuration;
               const staveNote = new StaveNote({ keys: chordNotes, duration });
 
               chordNotes.forEach((noteStr, i) => {
@@ -171,11 +189,12 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
               });
 
               notes.push(staveNote);
-              for (let p = b; p <= b + emptyCount; p++) {
+              const consumed = spanDuration ? emptyCount : 0;
+              for (let p = b; p <= b + consumed; p++) {
                 processedBeats.add(p);
               }
             } else {
-              notes.push(new GhostNote({ duration: 'q' }));
+              notes.push(new GhostNote({ duration: baseDuration }));
               processedBeats.add(b);
             }
           }

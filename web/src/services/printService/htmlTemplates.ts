@@ -34,6 +34,7 @@ export function generatePrintHtml(
     }
   }
 
+  const beatsPerBar = composition.globalSettings.chordsPerBar || 4;
   const usedChords = getUsedChords(pages, chordsData);
   const styles = generatePrintStyles(options);
   const header = generateHeaderHtml(composition);
@@ -41,7 +42,7 @@ export function generatePrintHtml(
     ? generateChordReferenceHtml(usedChords)
     : '<div class="chord-reference-placeholder"></div>';
   const pagesHtml = pages.map((page, index) =>
-    generatePageHtml(page, index + 1, pages.length, chordsData, options)
+    generatePageHtml(page, index + 1, pages.length, chordsData, options, beatsPerBar)
   ).join('\n');
 
   return `<!DOCTYPE html>
@@ -443,9 +444,13 @@ function generatePageHtml(
   pageNumber: number,
   totalPages: number,
   chordsData: ChordData[],
-  options: PrintOptions
+  options: PrintOptions,
+  beatsPerBar = 4
 ): string {
   const barsHtml: string[] = [];
+  const emptyBar = Array(beatsPerBar).fill('');
+  // The row renderers divide the 800px row width across all bars' slots.
+  const slotsPerRow = beatsPerBar * 4;
 
   // 4 rows of 4 bars each
   for (let rowIndex = 0; rowIndex < 4; rowIndex++) {
@@ -457,23 +462,23 @@ function generatePageHtml(
     for (let colIndex = 0; colIndex < 4; colIndex++) {
       const barIndex = rowIndex * 4 + colIndex;
       const lyrics = page.barLyrics[barIndex] || '';
-      const beatChords = page.barBeatChords[barIndex] || ['', '', '', ''];
-      
+      const beatChords = page.barBeatChords[barIndex] || emptyBar;
+
       const hasChords = beatChords.some(c => c && c.trim() !== '');
       const hasLyrics = lyrics.trim() !== '';
       const isEmpty = !hasChords && !hasLyrics;
 
       rowBarsData.push({ lyrics, beatChords, hasChords, hasLyrics, isEmpty });
       rowBeatChords.push(...beatChords);
-      
+
       if (!isEmpty) rowHasContent = true;
     }
 
     // Only render the staff/tab systems for rows that actually have content.
     // Empty rows would otherwise print full-height blank staves and waste pages.
     const renderSystems = rowHasContent;
-    const notesSvg = renderSystems && options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70) : '';
-    const tabSvg = renderSystems && options.includeTablature ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55) : '';
+    const notesSvg = renderSystems && options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70, slotsPerRow) : '';
+    const tabSvg = renderSystems && options.includeTablature ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55, slotsPerRow) : '';
 
     // Skip empty rows entirely (no chords and no lyrics anywhere in the row).
     if (!rowHasContent) {

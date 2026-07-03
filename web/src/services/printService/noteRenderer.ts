@@ -186,9 +186,10 @@ export function generateNotesSvg(
 export function generateNotesHtml(
   beatChords: string[],
   measureWidth: number,
-  staffHeight: number
+  staffHeight: number,
+  beatsPerBar = 4
 ): string {
-  const beatWidth = measureWidth / 4;
+  const beatWidth = measureWidth / beatsPerBar;
 
   const notesHtml = beatChords.map((chord, beatIndex) => {
     if (!chord || chord.trim() === '') return '';
@@ -246,12 +247,13 @@ export function generateTablatureHtml(
   beatChords: string[],
   chordsData: ChordDataForTab[],
   measureWidth: number,
-  tabHeight: number
+  tabHeight: number,
+  beatsPerBar = 4
 ): string {
   // Check if there are any chords - fret numbers are conditional
   const hasChords = beatChords.some(c => c && c.trim() !== '' && c !== '-');
 
-  const beatWidth = measureWidth / 4;
+  const beatWidth = measureWidth / beatsPerBar;
   const stringSpacing = tabHeight / 6;
   const labelWidth = 12;
   const contentWidth = measureWidth - labelWidth;
@@ -278,7 +280,7 @@ export function generateTablatureHtml(
     const chord = chordsData.find(c => c.name === chordName);
     if (!chord || !chord.fingering) return '';
 
-    const beatX = labelWidth + (contentWidth / 4) * beatIndex + (contentWidth / 4) / 2;
+    const beatX = labelWidth + (contentWidth / beatsPerBar) * beatIndex + (contentWidth / beatsPerBar) / 2;
 
     // Fingering array is [low E, A, D, G, B, high e] but we display [e, B, G, D, A, E]
     // So we need to reverse the order for display
@@ -289,7 +291,7 @@ export function generateTablatureHtml(
       const displayValue = fret === 'x' ? 'x' : fret;
       // Transparent background for fret number - lines show through
       const bgRect = `<rect x="${beatX - 5}" y="${y - 8}" width="10" height="10" fill="none" />`;
-      const text = `<text x="${beatX}" y="${y}" font-size="8" font-family="monospace" font-weight="bold" fill="#000" text-anchor="middle">${displayValue}</text>`;
+      const text = `<text x="${beatX}" y="${y}" font-size="9" font-family="monospace" font-weight="600" fill="#000" text-anchor="middle">${displayValue}</text>`;
       return bgRect + text;
     }).join('');
   }).join('')) : '';

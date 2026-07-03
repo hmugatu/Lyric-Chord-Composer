@@ -20,6 +20,7 @@ interface TablatureProps {
   width: number;
   height?: number;
   numMeasures?: number;
+  beatsPerBar?: number;
   paperColor?: string;
 }
 
@@ -29,6 +30,7 @@ export const Tablature: React.FC<TablatureProps> = ({
   width,
   height = 60,
   numMeasures = 4,
+  beatsPerBar = 4,
   paperColor = '#fff',
 }) => {
   const totalWidth = width - 20;
@@ -65,8 +67,8 @@ export const Tablature: React.FC<TablatureProps> = ({
   };
 
   const getBeatXPosition = (beatIndex: number): number => {
-    const measureIndex = Math.floor(beatIndex / 4);
-    const beatWithinMeasure = beatIndex % 4;
+    const measureIndex = Math.floor(beatIndex / beatsPerBar);
+    const beatWithinMeasure = beatIndex % beatsPerBar;
 
     let measureStart = 10;
     if (measureIndex > 0) {
@@ -76,14 +78,14 @@ export const Tablature: React.FC<TablatureProps> = ({
     const currentMeasureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
 
     // In measure 1 the staff pushes its first note past the clef/time-sig, so
-    // reserve the same space here and spread the 4 beats across the remainder.
+    // reserve the same space here and spread the beats across the remainder.
     if (measureIndex === 0) {
       const usableWidth = currentMeasureWidth - CLEF_RESERVE;
-      const beatWidth = usableWidth / 4;
+      const beatWidth = usableWidth / beatsPerBar;
       return measureStart + CLEF_RESERVE + beatWidth * beatWithinMeasure + beatWidth / 2;
     }
 
-    const beatWidth = currentMeasureWidth / 4;
+    const beatWidth = currentMeasureWidth / beatsPerBar;
     return measureStart + beatWidth * beatWithinMeasure + beatWidth / 2;
   };
 
@@ -141,8 +143,8 @@ export const Tablature: React.FC<TablatureProps> = ({
                   >
                     <span
                       style={{
-                        fontSize: 9,
-                        fontWeight: 'bold',
+                        fontSize: 10,
+                        fontWeight: 600,
                         color: '#000',
                         fontFamily: 'monospace',
                         backgroundColor: paperColor,
