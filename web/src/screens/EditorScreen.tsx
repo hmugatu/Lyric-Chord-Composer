@@ -11,6 +11,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import { useCompositionStore } from '../store/compositionStore';
+import { ALTERNATE_TUNINGS } from '../models/Note';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService, PrintOptions } from '../services/printService';
 import { PrintDialog } from '../components/PrintDialog';
@@ -90,6 +91,8 @@ export const EditorScreen: React.FC = () => {
   const [beats, setBeats] = React.useState('');
   const [beatValue, setBeatValue] = React.useState('');
   const [tuningName, setTuningName] = React.useState('');
+  // 6 string notes low->high, as a comma/space list for the custom override.
+  const [tuningNotes, setTuningNotes] = React.useState('');
   // Chords-per-bar is edited as a pending value in Settings and only committed
   // (re-slicing bars) on Save, so Cancel restores the previous value.
   const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(4);
@@ -164,6 +167,7 @@ export const EditorScreen: React.FC = () => {
     setBeats(currentComposition.globalSettings.timeSignature.beats.toString());
     setBeatValue(currentComposition.globalSettings.timeSignature.beatValue.toString());
     setTuningName(currentComposition.globalSettings.tuning.name);
+    setTuningNotes((currentComposition.globalSettings.tuning.notes || []).join(' '));
 
     if (currentComposition.notes) {
       try {
@@ -263,12 +267,24 @@ export const EditorScreen: React.FC = () => {
 
   const handleSettingsSave = () => {
     if (!currentComposition) return;
+
+    // Resolve tuning: a known preset uses its canonical notes; otherwise treat
+    // it as a custom tuning with the notes typed in the override field.
+    const preset = ALTERNATE_TUNINGS.find((t) => t.name === tuningName);
+    const customNotes = tuningNotes.trim().split(/[\s,]+/).filter(Boolean);
+    const tuning = preset
+      ? { name: preset.name, notes: [...preset.notes] }
+      : {
+          name: tuningName || 'Custom',
+          notes: customNotes.length > 0 ? customNotes : currentComposition.globalSettings.tuning.notes,
+        };
+
     updateGlobalSettings({
       tempo: parseInt(tempo) || 120,
       key: key || 'C',
       capo: parseInt(capo) || 0,
       timeSignature: { beats: parseInt(beats) || 4, beatValue: parseInt(beatValue) || 4 },
-      tuning: { ...currentComposition.globalSettings.tuning, name: tuningName || 'Standard' },
+      tuning,
     });
     // Commit the chords-per-bar change (re-slices bars) only on Save.
     if (pendingChordsPerBar !== chordsPerBar) {
@@ -657,7 +673,43 @@ export const EditorScreen: React.FC = () => {
                 ))}
               </TextField>
             </Box>
-            <TextField label="Tuning" value={tuningName} onChange={(e) => setTuningName(e.target.value)} size="small" placeholder="e.g., Standard, Drop D" />
+            <TextField
+              select
+              label="Tuning"
+              size="small"
+              value={ALTERNATE_TUNINGS.some((t) => t.name === tuningName) ? tuningName : '__custom__'}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '__custom__') {
+                  // Switch to a custom tuning, seeding notes from the current one.
+                  setTuningName('Custom');
+                  if (!tuningNotes.trim()) {
+                    setTuningNotes((currentComposition.globalSettings.tuning.notes || []).join(' '));
+                  }
+                } else {
+                  const preset = ALTERNATE_TUNINGS.find((t) => t.name === val);
+                  setTuningName(val);
+                  if (preset) setTuningNotes(preset.notes.join(' '));
+                }
+              }}
+            >
+              {ALTERNATE_TUNINGS.map((t) => (
+                <MenuItem key={t.name} value={t.name}>
+                  {t.name} ({t.notes.map((n) => n.replace(/\d+$/, '')).join(' ')})
+                </MenuItem>
+              ))}
+              <MenuItem value="__custom__">Custom…</MenuItem>
+            </TextField>
+            {!ALTERNATE_TUNINGS.some((t) => t.name === tuningName) && (
+              <TextField
+                label="Custom tuning (low → high)"
+                size="small"
+                value={tuningNotes}
+                onChange={(e) => setTuningNotes(e.target.value)}
+                placeholder="e.g. D2 A2 D3 G3 B3 E4"
+                helperText="Six string notes, low to high, space-separated"
+              />
+            )}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
               <Box>
                 <Typography variant="body2">Chords per bar</Typography>
