@@ -376,7 +376,7 @@ export const EditorScreen: React.FC = () => {
                   {/* Lyrics for the row */}
                   <Tooltip title="click here to add lyrics!" placement="top-start">
                     <input
-                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', outline: 'none', padding: '2px 0', marginTop: 8, marginBottom: 8, minHeight: 34, fontSize: 22, color: '#333' }}
+                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', outline: 'none', padding: '2px 0', marginTop: 8, marginBottom: 8, minHeight: 30, fontSize: 18, color: '#333' }}
                       value={barLyrics[rowIndex * 4] || ''}
                       onChange={(e) => handleLyricsChange(rowIndex * 4, e.target.value)}
                     />
