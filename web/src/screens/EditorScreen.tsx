@@ -12,6 +12,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import { useCompositionStore } from '../store/compositionStore';
 import { ALTERNATE_TUNINGS } from '../models/Note';
+import type { NoteDuration } from '../models/Note';
 import type { TabCell, TabTechnique } from '../models/Tablature';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService, PrintOptions } from '../services/printService';
@@ -70,6 +71,15 @@ const TECHNIQUE_OPTIONS: { value: TabTechnique; label: string }[] = [
 // Fret options for the picker: default 'x' (muted), then 0-28.
 const FRET_OPTIONS: string[] = ['x', ...Array.from({ length: 29 }, (_, i) => String(i))];
 
+// Note values a tab cell can be drawn as on the staff.
+const DURATION_OPTIONS: { value: NoteDuration; label: string }[] = [
+  { value: 'whole', label: 'Whole' },
+  { value: 'half', label: 'Half' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'eighth', label: 'Eighth' },
+  { value: 'sixteenth', label: 'Sixteenth' },
+];
+
 const totalMeasureWidth = CONTENT_WIDTH - 20;
 const firstMeasureWidth = totalMeasureWidth / 4 + 40;
 const otherMeasureWidth = (totalMeasureWidth - firstMeasureWidth) / 3;
@@ -124,7 +134,8 @@ export const EditorScreen: React.FC = () => {
 
   // Tab-cell editing popover state.
   const [tabPopover, setTabPopover] = React.useState<{
-    bar: number; cell: number; string: number; anchor: DOMRect; fret: string; techniques: TabTechnique[];
+    bar: number; cell: number; string: number; anchor: DOMRect; fret: string;
+    techniques: TabTechnique[]; duration: NoteDuration;
   } | null>(null);
 
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
@@ -161,6 +172,19 @@ export const EditorScreen: React.FC = () => {
       // Default new cells to 'x' (muted), matching the picker's default.
       fret: existing ? String(existing.fret) : 'x',
       techniques: existing?.techniques || [],
+      duration: existing?.duration || 'quarter',
+    });
+  };
+
+  // Re-seed the popover when the string is retargeted, from whatever exists there.
+  const retargetTabPopover = (bar: number, cell: number, string: number) => {
+    if (!tabPopover) return;
+    const existing = barTab[cellKey(bar, cell, string)];
+    setTabPopover({
+      ...tabPopover, bar, cell, string,
+      fret: existing ? String(existing.fret) : 'x',
+      techniques: existing?.techniques || [],
+      duration: existing?.duration || tabPopover.duration || 'quarter',
     });
   };
 
@@ -186,8 +210,8 @@ export const EditorScreen: React.FC = () => {
     if (raw === '') {
       setTabCell(tabPopover.bar, tabPopover.cell, tabPopover.string, null);
     } else {
-      const fret: number | 'x' = raw === 'x' ? 'x' : Math.max(0, Math.min(24, parseInt(raw) || 0));
-      const cell: TabCell = { fret };
+      const fret: number | 'x' = raw === 'x' ? 'x' : Math.max(0, Math.min(28, parseInt(raw) || 0));
+      const cell: TabCell = { fret, duration: tabPopover.duration };
       if (tabPopover.techniques.length > 0) cell.techniques = tabPopover.techniques;
       setTabCell(tabPopover.bar, tabPopover.cell, tabPopover.string, cell);
     }
@@ -275,10 +299,51 @@ export const EditorScreen: React.FC = () => {
     setBarLyrics(newLyrics);
   };
 
+  // Cells-per-bar for the 16th grid, from the time signature.
+  const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
+
+  // Stamp a chord's fingering into the tab grid at (bar, beat). Only cells that
+  // were auto-stamped from a chord (source:'chord') are cleared first, so any
+  // hand-entered/edited notes at that position survive. New stamped cells are
+  // tagged source:'chord' so removing the chord later removes only them.
+  const stampChordToTab = (
+    tab: Record<string, TabCell>,
+    barIndex: number,
+    beatIndex: number,
+    chordName: string
+  ): Record<string, TabCell> => {
+    const next = { ...tab };
+    const cell = Math.round((beatIndex / chordsPerBar) * cellsPerBar);
+    // Remove previously chord-stamped cells at this (bar, cell); keep manual ones.
+    for (let s = 0; s < 6; s++) {
+      const k = `${barIndex}:${cell}:${s}`;
+      if (next[k]?.source === 'chord') delete next[k];
+    }
+
+    const chordData = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
+    if (chordData?.fingering) {
+      // fingering is low->high [E A D G B e]; string index = position in array.
+      chordData.fingering.forEach((f, s) => {
+        if (f !== 'x' && f !== '' && f != null) {
+          const k = `${barIndex}:${cell}:${s}`;
+          // Don't clobber a hand-entered note that's sitting on this exact cell.
+          if (next[k] && next[k].source !== 'chord') return;
+          next[k] = { fret: parseInt(f, 10) || 0, duration: 'quarter', source: 'chord' };
+        }
+      });
+    }
+    return next;
+  };
+
   const handleBeatChordChange = (barIndex: number, beatIndex: number, chord: string) => {
     const newChords = barBeatChords.map((row) => [...row]);
     newChords[barIndex][beatIndex] = chord;
-    setBarBeatChords(newChords);
+    // Also stamp (or clear) the chord's frets into the tab grid at this position.
+    const newTab = stampChordToTab(allPages[currentPage]?.barTab || {}, barIndex, beatIndex, chord);
+    const newPages = [...allPages];
+    newPages[currentPage] = { ...newPages[currentPage], barBeatChords: newChords, barTab: newTab };
+    setAllPages(newPages);
+    persistPages(newPages);
   };
 
   const openChordSelector = (barIndex: number, beatIndex: number) => {
@@ -621,6 +686,9 @@ export const EditorScreen: React.FC = () => {
                       beatsPerBar={chordsPerBar}
                       tsBeats={currentComposition.globalSettings.timeSignature.beats}
                       tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
+                      tuning={currentComposition.globalSettings.tuning.notes}
+                      barTab={barTab}
+                      rowStartBar={rowIndex * 4}
                     />
                   </Box>
                 </Box>
@@ -851,9 +919,19 @@ export const EditorScreen: React.FC = () => {
       >
         {tabPopover && (
           <Box sx={{ p: 1.5, width: 260, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <Typography variant="caption" color="text.secondary">
-              16th note #{tabPopover.cell + 1}
-            </Typography>
+            <TextField
+              select
+              label="Note value"
+              size="small"
+              fullWidth
+              value={tabPopover.duration}
+              onChange={(e) => setTabPopover({ ...tabPopover, duration: e.target.value as NoteDuration })}
+              helperText="How this note is drawn on the staff"
+            >
+              {DURATION_OPTIONS.map((d) => (
+                <MenuItem key={d.value} value={d.value}>{d.label}</MenuItem>
+              ))}
+            </TextField>
 
             <TextField
               select
@@ -861,8 +939,7 @@ export const EditorScreen: React.FC = () => {
               size="small"
               fullWidth
               value={tabPopover.string}
-              onChange={(e) => setTabPopover({ ...tabPopover, string: Number(e.target.value) })}
-              helperText="1 = low E · 6 = high e"
+              onChange={(e) => retargetTabPopover(tabPopover.bar, tabPopover.cell, Number(e.target.value))}
             >
               {[0, 1, 2, 3, 4, 5].map((s) => (
                 <MenuItem key={s} value={s}>

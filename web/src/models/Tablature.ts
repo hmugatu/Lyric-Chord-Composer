@@ -16,6 +16,13 @@ export type TabTechnique =
 export interface TabCell {
   fret: number | 'x';
   techniques?: TabTechnique[];
+  /** Note value drawn on the staff for this cell (defaults to derived spacing). */
+  duration?: NoteDuration;
+  /**
+   * 'chord' = auto-stamped from a placed chord (removed when the chord is
+   * removed). Absent/undefined = hand-entered or edited (survives chord removal).
+   */
+  source?: 'chord';
 }
 
 export interface TabNote {

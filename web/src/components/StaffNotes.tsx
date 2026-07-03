@@ -17,6 +17,12 @@ interface StaffNotesProps {
   tsBeats?: number;
   /** Time signature denominator (e.g. 8 in 6/8). */
   tsBeatValue?: number;
+  /** Open-string tuning notes low->high, e.g. ["E2","A2","D3","G3","B3","E4"]. */
+  tuning?: string[];
+  /** Sparse user tab frets keyed "bar:cell:string" (see PageData.barTab). */
+  barTab?: Record<string, import('../models/Tablature').TabCell>;
+  /** Absolute bar index this row starts at. */
+  rowStartBar?: number;
   scale?: number;
 }
 

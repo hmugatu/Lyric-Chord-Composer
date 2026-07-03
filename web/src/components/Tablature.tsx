@@ -69,14 +69,6 @@ export const Tablature: React.FC<TablatureProps> = ({
   // 16th-note cells per bar, driven by the time signature.
   const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
 
-  const beatFingerings = beatChords.map((chordName) => {
-    if (!chordName || chordName.trim() === '' || chordName === '-') {
-      return null;
-    }
-    const chord = chordsData.find((c) => c.name === chordName);
-    return chord ? chord.fingering : null;
-  });
-
   const stringHeight = height / 6;
 
   const getBarLinePositions = (): number[] => {
@@ -142,53 +134,7 @@ export const Tablature: React.FC<TablatureProps> = ({
           />
         ))}
 
-        {/* FAINT chord-derived frets (at beat positions) */}
-        {beatFingerings.map((fingering, beatIndex) => {
-          if (!fingering) return null;
-          const beatX = getSubdivisionX(beatIndex, beatsPerBar);
-          const displayFingering = [...fingering].reverse(); // [e B G D A E]
-
-          return (
-            <div key={`beat-${beatIndex}`} style={{ position: 'absolute', top: 0, bottom: 0, width: 18, left: beatX - 8, pointerEvents: 'none' }}>
-              {displayFingering.map((fret, row) => {
-                const modelString = NUM_STRINGS - 1 - row;
-                // If the user placed an explicit cell anywhere in this bar on this
-                // string, hide the derived fret for that string (manual wins).
-                const bar = rowStartBar + Math.floor(beatIndex / beatsPerBar);
-                const hasManualOnString =
-                  barTab &&
-                  Object.keys(barTab).some((k) => {
-                    const [b, , s] = k.split(':').map(Number);
-                    return b === bar && s === modelString;
-                  });
-                if (hasManualOnString) return null;
-
-                const displayValue = fret === 'x' ? 'x' : fret;
-                const yPos = stringHeight * row + stringHeight / 2;
-                return (
-                  <div
-                    key={`fret-${beatIndex}-${row}`}
-                    style={{
-                      position: 'absolute', left: 0, width: 18, height: 12,
-                      display: 'flex', justifyContent: 'center', alignItems: 'center', top: yPos - 7,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10, fontWeight: 600, color: '#00000066',
-                        fontFamily: 'monospace', backgroundColor: paperColor, padding: '0 1px', lineHeight: 1,
-                      }}
-                    >
-                      {displayValue}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-
-        {/* SOLID user-entered frets (at 16th-cell positions) */}
+        {/* Tab frets (stamped from chords or hand-entered), at 16th-cell positions */}
         {barTab &&
           Object.entries(barTab).map(([key, cellData]) => {
             const [bar, cell, modelString] = key.split(':').map(Number);
