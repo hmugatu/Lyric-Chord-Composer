@@ -5,6 +5,8 @@
 
 import Chord from '@tonaljs/chord';
 import Note from '@tonaljs/note';
+import type { TabTechnique } from '../../models/Tablature';
+import { formatFretWithTechniques } from '../../utils/tabTechnique';
 
 export interface StaffNote {
   pitch: string;      // e.g., "C4", "E4", "G4"
@@ -243,6 +245,7 @@ export interface ChordDataForTab {
 /** A user-entered tab cell for print (mirror of models/Tablature TabCell). */
 export interface UserTabCell {
   fret: number | 'x';
+  techniques?: TabTechnique[];
 }
 
 /**
@@ -327,8 +330,8 @@ export function generateTablatureHtml(
     const cellX = labelWidth + (contentWidth / totalCells) * globalCell + (contentWidth / totalCells) / 2;
     const stringIndex = 5 - modelString; // display row (top = high e)
     const y = stringSpacing * stringIndex + stringSpacing / 2 + 3;
-    const displayValue = cellData.fret === 'x' ? 'x' : String(cellData.fret);
-    return `<text x="${cellX}" y="${y}" font-size="9" font-family="monospace" font-weight="700" fill="#000" text-anchor="middle">${displayValue}</text>`;
+    const displayValue = formatFretWithTechniques(cellData.fret, cellData.techniques);
+    return `<text x="${cellX}" y="${y}" font-size="9" font-family="monospace" font-weight="700" fill="#000" text-anchor="middle">${escapeXmlText(displayValue)}</text>`;
   }).join('');
 
   return `
@@ -339,4 +342,12 @@ export function generateTablatureHtml(
       ${userFrets}
     </svg>
   `;
+}
+
+// Escape text for inclusion in an SVG <text> node (harmonics use < >).
+function escapeXmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

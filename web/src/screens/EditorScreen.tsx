@@ -56,16 +56,19 @@ const KEY_OPTIONS = [
 const BEATS_OPTIONS = [2, 3, 4, 5, 6, 7, 9, 12];
 const BEAT_VALUE_OPTIONS = [2, 4, 8, 16];
 
-// Techniques offered in the tab-cell popover.
+// Techniques offered in the tab-cell popover (full words — we have space).
 const TECHNIQUE_OPTIONS: { value: TabTechnique; label: string }[] = [
-  { value: 'hammer-on', label: 'Hammer' },
-  { value: 'pull-off', label: 'Pull' },
+  { value: 'hammer-on', label: 'Hammer-on' },
+  { value: 'pull-off', label: 'Pull-off' },
   { value: 'slide', label: 'Slide' },
   { value: 'bend', label: 'Bend' },
   { value: 'vibrato', label: 'Vibrato' },
-  { value: 'palm-mute', label: 'P.M.' },
-  { value: 'harmonic', label: 'Harm.' },
+  { value: 'palm-mute', label: 'Palm mute' },
+  { value: 'harmonic', label: 'Harmonic' },
 ];
+
+// Fret options for the picker: default 'x' (muted), then 0-28.
+const FRET_OPTIONS: string[] = ['x', ...Array.from({ length: 29 }, (_, i) => String(i))];
 
 const totalMeasureWidth = CONTENT_WIDTH - 20;
 const firstMeasureWidth = totalMeasureWidth / 4 + 40;
@@ -155,7 +158,8 @@ export const EditorScreen: React.FC = () => {
     const existing = barTab[cellKey(bar, cell, string)];
     setTabPopover({
       bar, cell, string, anchor,
-      fret: existing ? String(existing.fret) : '',
+      // Default new cells to 'x' (muted), matching the picker's default.
+      fret: existing ? String(existing.fret) : 'x',
       techniques: existing?.techniques || [],
     });
   };
@@ -846,66 +850,66 @@ export const EditorScreen: React.FC = () => {
         anchorPosition={tabPopover ? { top: tabPopover.anchor.bottom + 4, left: tabPopover.anchor.left } : undefined}
       >
         {tabPopover && (
-          <Box sx={{ p: 1.5, width: 240 }}>
+          <Box sx={{ p: 1.5, width: 260, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Typography variant="caption" color="text.secondary">
-              String {6 - tabPopover.string} (low E = 1) · 16th #{tabPopover.cell + 1}
+              16th note #{tabPopover.cell + 1}
             </Typography>
+
             <TextField
+              select
+              label="String"
+              size="small"
+              fullWidth
+              value={tabPopover.string}
+              onChange={(e) => setTabPopover({ ...tabPopover, string: Number(e.target.value) })}
+              helperText="1 = low E · 6 = high e"
+            >
+              {[0, 1, 2, 3, 4, 5].map((s) => (
+                <MenuItem key={s} value={s}>
+                  String {s + 1} ({['E', 'A', 'D', 'G', 'B', 'e'][s]})
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
               label="Fret"
               size="small"
-              autoFocus
               fullWidth
-              value={tabPopover.fret}
+              autoFocus
+              value={tabPopover.fret === '' ? 'x' : tabPopover.fret}
               onChange={(e) => setTabPopover({ ...tabPopover, fret: e.target.value })}
-              placeholder="0-24 or x"
-              sx={{ mt: 1 }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  applyTabPopover();
-                }
-              }}
-            />
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-              {['x', '0', '1', '2', '3', '4', '5', '7', '9', '12'].map((f) => (
-                <Button
-                  key={f}
-                  size="small"
-                  variant={tabPopover.fret === f ? 'contained' : 'outlined'}
-                  onClick={() => setTabPopover({ ...tabPopover, fret: f })}
-                  sx={{ minWidth: 32, px: 0.5 }}
-                >
-                  {f}
-                </Button>
+            >
+              {FRET_OPTIONS.map((f) => (
+                <MenuItem key={f} value={f}>{f === 'x' ? 'x (muted)' : f}</MenuItem>
               ))}
-            </Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
-              Technique
-            </Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-              {TECHNIQUE_OPTIONS.map((t) => {
-                const active = tabPopover.techniques.includes(t.value);
-                return (
-                  <Button
-                    key={t.value}
-                    size="small"
-                    variant={active ? 'contained' : 'outlined'}
-                    color={active ? 'info' : 'inherit'}
-                    onClick={() =>
-                      setTabPopover({
-                        ...tabPopover,
-                        techniques: active
-                          ? tabPopover.techniques.filter((x) => x !== t.value)
-                          : [...tabPopover.techniques, t.value],
-                      })
-                    }
-                    sx={{ minWidth: 0, px: 0.75, textTransform: 'none' }}
-                  >
-                    {t.label}
-                  </Button>
-                );
-              })}
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1.5 }}>
+            </TextField>
+
+            <TextField
+              select
+              label="Technique"
+              size="small"
+              fullWidth
+              SelectProps={{
+                multiple: true,
+                renderValue: (selected) => {
+                  const vals = selected as TabTechnique[];
+                  if (vals.length === 0) return 'None';
+                  return vals.map((v) => TECHNIQUE_OPTIONS.find((t) => t.value === v)?.label).join(', ');
+                },
+              }}
+              value={tabPopover.techniques}
+              onChange={(e) => {
+                const val = e.target.value as unknown as TabTechnique[];
+                setTabPopover({ ...tabPopover, techniques: val });
+              }}
+            >
+              {TECHNIQUE_OPTIONS.map((t) => (
+                <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+              ))}
+            </TextField>
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
               <Button size="small" color="inherit" onClick={clearTabPopover}>Clear</Button>
               <Button size="small" variant="contained" onClick={applyTabPopover}>Apply</Button>
             </Box>

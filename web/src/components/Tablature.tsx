@@ -11,6 +11,7 @@
 
 import React from 'react';
 import type { TabCell } from '../models/Tablature';
+import { formatFretWithTechniques } from '../utils/tabTechnique';
 
 interface ChordData {
   name: string;
@@ -198,13 +199,14 @@ export const Tablature: React.FC<TablatureProps> = ({
             const x = getSubdivisionX(globalCell, cellsPerBar);
             const row = NUM_STRINGS - 1 - modelString; // display row
             const yPos = stringHeight * row + stringHeight / 2;
-            const displayValue = cellData.fret === 'x' ? 'x' : String(cellData.fret);
+            const displayValue = formatFretWithTechniques(cellData.fret, cellData.techniques);
             return (
               <div
                 key={`tab-${key}`}
                 style={{
-                  position: 'absolute', width: 18, left: x - 9, top: yPos - 7, height: 14,
+                  position: 'absolute', left: x, top: yPos - 7, height: 14, transform: 'translateX(-50%)',
                   display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 <span
