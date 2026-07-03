@@ -216,16 +216,15 @@ function generatePrintStyles(options: PrintOptions): string {
       min-height: 40pt;
     }
 
-    /* Lyrics */
-    .bar-lyrics {
+    /* Lyrics — one line spanning the whole row, wraps instead of clipping. */
+    .row-lyrics {
       font-size: 11pt;
-      text-align: center;
-      margin-bottom: 1pt;
-      min-height: 12pt;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.1;
+      text-align: left;
+      margin-bottom: 3pt;
+      line-height: 1.25;
+      white-space: normal;
+      overflow-wrap: break-word;
+      word-break: break-word;
     }
 
     /* Chord Row */
@@ -481,16 +480,21 @@ function generatePageHtml(
       continue;
     }
 
+    // Lyrics are authored as one line spanning the whole row (stored at the
+    // first bar of the row), so render them once, full-width, above the bars.
+    const rowLyrics = rowBarsData[0]?.lyrics || '';
+
     let rowHtml = `
       <div class="bar-row">
+        ${rowLyrics.trim() !== '' ? `<div class="row-lyrics">${escapeHtml(rowLyrics)}</div>` : ''}
         ${options.includeTablature ? `<div class="row-tablature">${tabSvg}</div>` : ''}
         <div class="bars-container">
     `;
 
-    // Generate individual bars for this row
+    // Generate individual bars for this row (chord boxes only; lyrics are
+    // rendered once per row above).
     for (let colIndex = 0; colIndex < 4; colIndex++) {
       const barData = rowBarsData[colIndex];
-      const barIndex = rowIndex * 4 + colIndex;
 
       // Generate chord boxes - empty ones invisible, no borders
       const chordBoxesHtml = barData.beatChords
@@ -502,7 +506,6 @@ function generatePageHtml(
 
       rowHtml += `
         <div class="bar${barData.isEmpty ? ' empty-bar' : ''}">
-          <div class="bar-lyrics">${escapeHtml(barData.lyrics)}</div>
           <div class="chord-row">${chordBoxesHtml}</div>
         </div>
       `;
