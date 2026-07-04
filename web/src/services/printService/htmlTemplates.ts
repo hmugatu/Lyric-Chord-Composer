@@ -51,6 +51,10 @@ const STAFF_SCALE = 0.75;
 // printed staff so all rows share one compact height and 16 bars fit a page.
 // At ROW_WIDTH=800 -> printed width ~750px, this renders ~140px tall.
 const STAFF_WINDOW = 120;
+// VexFlow always draws the 5 stave lines at y = 41,51,61,71,81 in the scaled
+// render space (independent of the notes). We anchor the crop window on the
+// middle line so the staff sits at a constant vertical position every row.
+const STAFF_LINE_MID = 61;
 
 export interface PrintOptions {
   includeChordDiagrams: boolean;
@@ -443,21 +447,21 @@ async function generateStaffSvg(
 
     const svg = container.querySelector('svg') as SVGSVGElement | null;
     if (!svg) return '';
-    // Crop to a FIXED-height window anchored on the staff so every row prints
-    // the same compact height (letting all 16 bars fit one page) instead of
-    // note-heavy rows ballooning. The window is tall enough for the 5-line
-    // stave plus a few ledger positions each way; notes further out clip
-    // slightly rather than stretch the whole page. Centered on the content's
-    // vertical midpoint so notes above and below the staff share the room.
-    let vbY = 0, vbH = STAFF_WINDOW;
-    try {
-      const bbox = svg.getBBox();
-      const mid = bbox.y + bbox.height / 2;
-      vbY = mid - STAFF_WINDOW / 2;
-    } catch {
-      // getBBox can throw if not measurable; fall back to top of canvas.
-    }
-    svg.setAttribute('viewBox', `0 ${vbY} ${ROW_WIDTH} ${vbH}`);
+    // VexFlow draws in its own scaled coordinate space and sets a viewBox whose
+    // width = renderWidth / scale (e.g. 800/0.75 = 1066.67). We must reuse THAT
+    // width — cropping to ROW_WIDTH (800) chopped off the last measure and any
+    // notes in it. We only override the vertical window.
+    const existingVb = svg.getAttribute('viewBox');
+    const drawWidth = existingVb ? parseFloat(existingVb.split(/\s+/)[2]) : ROW_WIDTH / STAFF_SCALE;
+    // Crop to a FIXED-height window anchored on the STAVE LINES (which VexFlow
+    // always draws at the same y regardless of content — see STAFF_LINE_MID),
+    // NOT on the content bounding box. Anchoring on the bbox made the staff
+    // jump vertically row-to-row (a lone low/high note re-centered the whole
+    // system). A fixed window keeps every row's staff in the same place; notes
+    // reaching past it clip slightly rather than shifting the staff.
+    const vbY = STAFF_LINE_MID - STAFF_WINDOW / 2;
+    const vbH = STAFF_WINDOW;
+    svg.setAttribute('viewBox', `0 ${vbY} ${drawWidth} ${vbH}`);
     svg.setAttribute('width', '100%');
     svg.removeAttribute('height');
     svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');

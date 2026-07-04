@@ -208,19 +208,33 @@ export async function renderStaffToContainer(
 
     // Default ghost-note duration = one 16th cell.
     const cellDur = DURATION_TO_VF['sixteenth'];
+    // One 16th cell in VexFlow ticks, for coalescing empty runs into a single
+    // ghost note. Emitting one ghost per 16th cell (up to 15 per bar) plus a
+    // wide chord overflowed the measure and clipped the notes off the right;
+    // coalescing keeps the tickable count low so notes stay inside the stave.
+    const cellTicks = WHOLE_TICKS / 16;
 
+    // Push a ghost note spanning `runCells` empty 16th cells, broken into clean
+    // durations so VexFlow can render it (e.g. 8 empty cells -> one half rest).
+    const pushEmptyRun = (runCells: number) => {
+      let remaining = runCells * cellTicks;
+      while (remaining > 0) {
+        const { duration, ticks } = ticksToDuration(remaining);
+        notes.push(new GhostNote({ duration }));
+        remaining -= ticks;
+      }
+    };
+
+    let emptyRun = 0;
     for (let c = 0; c < cellsPerBar; c++) {
       const group = byCell.get(c);
-      if (group && group.length > 0) {
-        const keys = group
-          .map((g) => fretToVexKey(g.string, g.cell.fret as number, tuning))
-          .filter((k): k is string => !!k);
-        if (keys.length === 0) {
-          notes.push(new GhostNote({ duration: cellDur }));
-          continue;
-        }
+      const keys = group
+        ? group.map((g) => fretToVexKey(g.string, g.cell.fret as number, tuning)).filter((k): k is string => !!k)
+        : [];
+      if (keys.length > 0) {
+        if (emptyRun > 0) { pushEmptyRun(emptyRun); emptyRun = 0; }
         // Duration: use the longest chosen among stacked notes (they share a stem).
-        const durModel = group.find((g) => g.cell.duration)?.cell.duration || 'sixteenth';
+        const durModel = group!.find((g) => g.cell.duration)?.cell.duration || 'sixteenth';
         const duration = DURATION_TO_VF[durModel] || cellDur;
         const staveNote = new StaveNote({ keys, duration });
         keys.forEach((k, i) => {
@@ -229,9 +243,10 @@ export async function renderStaffToContainer(
         });
         notes.push(staveNote);
       } else {
-        notes.push(new GhostNote({ duration: cellDur }));
+        emptyRun += 1;
       }
     }
+    if (emptyRun > 0) pushEmptyRun(emptyRun);
 
     // Non-strict: chords-per-bar and the time signature don't always divide
     // evenly (e.g. 8 slots in 3/4), so allow approximate tick sums rather
