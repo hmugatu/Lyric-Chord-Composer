@@ -10,6 +10,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import PostAddIcon from '@mui/icons-material/PostAdd';
 import { useCompositionStore } from '../store/compositionStore';
 import { ALTERNATE_TUNINGS } from '../models/Note';
 import type { NoteDuration } from '../models/Note';
@@ -17,6 +18,9 @@ import type { TabCell, TabTechnique } from '../models/Tablature';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService, PrintOptions } from '../services/printService';
 import { PrintDialog } from '../components/PrintDialog';
+import { ImportTextDialog } from '../components/ImportTextDialog';
+import { LyricLine } from '../components/LyricLine';
+import { textToPages } from '../utils/importText';
 import { StaffNotes } from '../components/StaffNotes';
 import { Tablature } from '../components/Tablature';
 import { ChordDiagram, MiniChordDiagram, ChordData } from '../components/ChordDiagram';
@@ -59,6 +63,9 @@ const KEY_OPTIONS = [
 
 // Common time-signature values.
 const BEATS_OPTIONS = [2, 3, 4, 5, 6, 7, 9, 12];
+
+// Chord slots per bar offered in Settings and the import dialog.
+const CHORDS_PER_BAR_OPTIONS = [1, 2, 3, 4, 6, 8];
 const BEAT_VALUE_OPTIONS = [2, 4, 8, 16];
 
 // Techniques offered in the tab-cell popover (full words — we have space).
@@ -107,6 +114,11 @@ export const EditorScreen: React.FC = () => {
   const [showPrintDialog, setShowPrintDialog] = React.useState(false);
   const [showChordModal, setShowChordModal] = React.useState(false);
   const [showNewDialog, setShowNewDialog] = React.useState(false);
+  const [showImportDialog, setShowImportDialog] = React.useState(false);
+  const [showImportConfirm, setShowImportConfirm] = React.useState(false);
+  const [pendingImport, setPendingImport] = React.useState<{
+    text: string; barsPerLine: number; chordsPerBar: number;
+  } | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isPrinting, setIsPrinting] = React.useState(false);
   const [snackbar, setSnackbar] = React.useState({ open: false, message: '' });
@@ -122,6 +134,7 @@ export const EditorScreen: React.FC = () => {
   // Chords-per-bar is edited as a pending value in Settings and only committed
   // (re-slicing bars) on Save, so Cancel restores the previous value.
   const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(4);
+  const [pendingLyricSpacing, setPendingLyricSpacing] = React.useState<'stretch' | 'left'>('stretch');
 
   const [currentPage, setCurrentPage] = React.useState(0);
   const [allPages, setAllPages] = React.useState<PageState[]>([emptyPage()]);
@@ -138,6 +151,7 @@ export const EditorScreen: React.FC = () => {
   } | null>(null);
 
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
+  const lyricSpacing = currentComposition?.globalSettings.lyricSpacing || 'stretch';
   const tsBeats = currentComposition?.globalSettings.timeSignature.beats || 4;
   const tsBeatValue = currentComposition?.globalSettings.timeSignature.beatValue || 4;
 
@@ -150,6 +164,45 @@ export const EditorScreen: React.FC = () => {
     if (currentComposition) {
       updateComposition({ notes: JSON.stringify({ pages }) });
       saveToCache();
+    }
+  };
+
+  // Any content on any page? Used to warn before an import overwrites work.
+  const hasContent = (pages: PageState[]) =>
+    pages.some(
+      (p) =>
+        p.barLyrics.some((l) => l.trim()) ||
+        p.barBeatChords.some((bar) => bar.some((c) => c.trim())),
+    );
+
+  // Import pasted chords-over-lyrics text into the current composition, replacing
+  // its pages. Prompts first when there is existing content to overwrite.
+  const runImport = (text: string, barsPerLine: number, importChordsPerBar: number) => {
+    const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
+    const result = textToPages(text, importChordsPerBar, chordsData, cellsPerBar, barsPerLine);
+    setAllPages(result.pages);
+    setCurrentPage(0);
+    if (currentComposition) {
+      // Chords-per-bar is a global grid setting; keep it in sync with the import.
+      const settings =
+        importChordsPerBar !== chordsPerBar ? { chordsPerBar: importChordsPerBar } : undefined;
+      if (settings) updateGlobalSettings(settings);
+      updateComposition({ notes: JSON.stringify({ pages: result.pages }) });
+      saveToCache();
+    }
+    const unmapped = result.unmappedChords.length
+      ? ` (${result.unmappedChords.length} chord(s) approximated)`
+      : '';
+    setSnackbar({ open: true, message: `Imported ${result.filledRows} line(s)${unmapped}` });
+  };
+
+  const handleImportRequest = (text: string, barsPerLine: number, importChordsPerBar: number) => {
+    setShowImportDialog(false);
+    if (hasContent(allPages)) {
+      setPendingImport({ text, barsPerLine, chordsPerBar: importChordsPerBar });
+      setShowImportConfirm(true);
+    } else {
+      runImport(text, barsPerLine, importChordsPerBar);
     }
   };
 
@@ -406,6 +459,7 @@ export const EditorScreen: React.FC = () => {
   // Open Settings, seeding the pending chords-per-bar from the current value.
   const openSettings = () => {
     setPendingChordsPerBar(chordsPerBar);
+    setPendingLyricSpacing(lyricSpacing);
     setShowSettingsDialog(true);
   };
 
@@ -429,6 +483,7 @@ export const EditorScreen: React.FC = () => {
       capo: parseInt(capo) || 0,
       timeSignature: { beats: parseInt(beats) || 4, beatValue: parseInt(beatValue) || 4 },
       tuning,
+      lyricSpacing: pendingLyricSpacing,
     });
     // Commit the chords-per-bar change (re-slices bars) only on Save.
     if (pendingChordsPerBar !== chordsPerBar) {
@@ -513,6 +568,9 @@ export const EditorScreen: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Tooltip title="New composition">
             <IconButton onClick={handleCreateNew}><NoteAddIcon /></IconButton>
+          </Tooltip>
+          <Tooltip title="Import from text">
+            <IconButton onClick={() => setShowImportDialog(true)}><PostAddIcon /></IconButton>
           </Tooltip>
           <Tooltip title="Print">
             <span><IconButton onClick={() => setShowPrintDialog(true)} disabled={isPrinting}><PrintIcon /></IconButton></span>
@@ -621,14 +679,13 @@ export const EditorScreen: React.FC = () => {
                 // Guaranteed gap below each row so a staff's low notes never
                 // collide with the next row's lyrics.
                 <Box key={rowIndex} sx={{ mb: '12px' }}>
-                  {/* Lyrics for the row */}
-                  <Tooltip title="click here to add lyrics!" placement="top-start">
-                    <input
-                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', borderBottom: '1px solid #ccc', outline: 'none', padding: '2px 0', marginTop: '2px', marginBottom: '2px', minHeight: 30, fontSize: 18, color: '#333' }}
-                      value={barLyrics[rowIndex * 4] || ''}
-                      onChange={(e) => handleLyricsChange(rowIndex * 4, e.target.value)}
-                    />
-                  </Tooltip>
+                  {/* Lyrics for the row — justified edge-to-edge to fill the line. */}
+                  <LyricLine
+                    value={barLyrics[rowIndex * 4] || ''}
+                    width={CONTENT_WIDTH}
+                    justify={lyricSpacing === 'stretch'}
+                    onChange={(text) => handleLyricsChange(rowIndex * 4, text)}
+                  />
 
                   {/* Chord slots — each centered over the 16th cell its frets are
                       stamped to (see stampChordToTab), so names line up with
@@ -891,15 +948,32 @@ export const EditorScreen: React.FC = () => {
                 value={pendingChordsPerBar}
                 onChange={(_, v) => v && setPendingChordsPerBar(v)}
               >
-                <ToggleButton value={2}>2</ToggleButton>
-                <ToggleButton value={4}>4</ToggleButton>
-                <ToggleButton value={8}>8</ToggleButton>
+                {CHORDS_PER_BAR_OPTIONS.map((n) => (
+                  <ToggleButton key={n} value={n}>{n}</ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
+                <Typography variant="body2">Lyric spacing</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  How words fill each line
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={pendingLyricSpacing}
+                onChange={(_, v) => v && setPendingLyricSpacing(v)}
+              >
+                <ToggleButton value="left">Left</ToggleButton>
+                <ToggleButton value="stretch">Stretch</ToggleButton>
               </ToggleButtonGroup>
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setShowSettingsDialog(false); }}>Cancel</Button>
+          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setPendingLyricSpacing(lyricSpacing); setShowSettingsDialog(false); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSettingsSave}>Save</Button>
         </DialogActions>
       </Dialog>
@@ -921,6 +995,39 @@ export const EditorScreen: React.FC = () => {
       </Dialog>
 
       <PrintDialog open={showPrintDialog} onClose={() => setShowPrintDialog(false)} onPrint={handlePrint} />
+
+      <ImportTextDialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        defaultChordsPerBar={chordsPerBar}
+        onImport={handleImportRequest}
+      />
+
+      {/* Import overwrite confirmation */}
+      <Dialog open={showImportConfirm} onClose={() => setShowImportConfirm(false)}>
+        <DialogTitle>Replace current content?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Importing replaces the bars and lyrics in "{currentComposition.title || 'Untitled Song'}".
+            This can't be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowImportConfirm(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              setShowImportConfirm(false);
+              if (pendingImport) {
+                runImport(pendingImport.text, pendingImport.barsPerLine, pendingImport.chordsPerBar);
+              }
+            }}
+          >
+            Replace
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Tab-cell fret + technique popover */}
       <Popover

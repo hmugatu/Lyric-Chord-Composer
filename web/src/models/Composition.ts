@@ -43,6 +43,8 @@ export interface GlobalSettings {
   tuning: GuitarTuning;
   /** Chord/tab slots per bar: 2, 4 (default), or 8. Must divide 4/4 cleanly. */
   chordsPerBar?: number;
+  /** Lyric line spacing: 'stretch' justifies edge-to-edge, 'left' left-aligns. */
+  lyricSpacing?: 'stretch' | 'left';
 }
 
 export interface PageData {

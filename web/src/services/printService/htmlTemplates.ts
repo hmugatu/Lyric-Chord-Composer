@@ -308,7 +308,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
     /* Lyrics — one line spanning the whole row, wraps instead of clipping. */
     .row-lyrics {
       font-size: 11pt;
-      text-align: left;
+      /* Alignment is set inline per row from the lyricSpacing setting. */
       margin-bottom: 1pt;
       line-height: 1.15;
       white-space: normal;
@@ -493,6 +493,12 @@ async function generatePageHtml(
   const ts = composition.globalSettings.timeSignature;
   const cellsPerBar = cellsPerBarFor(ts?.beats || 4, ts?.beatValue || 4);
   const layout = getMeasureLayout(ROW_WIDTH, 4);
+  // Lyric spacing follows the editor setting: 'stretch' justifies edge-to-edge
+  // (text-align-last makes the single/last line stretch), 'left' left-aligns.
+  const lyricAlign =
+    (composition.globalSettings.lyricSpacing || 'stretch') === 'stretch'
+      ? 'text-align: justify; text-align-last: justify;'
+      : 'text-align: left;';
 
   // Chord reference for THIS page's chords, repeated at the top of every page
   // (not just page 1) so players don't have to flip back.
@@ -542,7 +548,7 @@ async function generatePageHtml(
 
     barsHtml.push(`
       <div class="bar-row">
-        ${rowLyrics.trim() !== '' ? `<div class="row-lyrics">${escapeHtml(rowLyrics)}</div>` : ''}
+        ${rowLyrics.trim() !== '' ? `<div class="row-lyrics" style="${lyricAlign}">${escapeHtml(rowLyrics)}</div>` : ''}
         <div class="chord-names-row">${chordRowSvg}</div>
         ${options.includeTablature ? `<div class="row-tablature">${tabSvg}</div>` : ''}
         ${options.includeNotation ? `<div class="row-staff">${staffSvg}</div>` : ''}
