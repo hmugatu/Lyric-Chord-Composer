@@ -22,7 +22,7 @@ export class PrintService {
     options: PrintOptions
   ): Promise<PrintResult> {
     try {
-      const html = generatePrintHtml(composition, chordsData, options);
+      const html = await generatePrintHtml(composition, chordsData, options);
       this.printBrowser(html);
       return { success: true };
     } catch (error) {
@@ -45,7 +45,10 @@ export class PrintService {
     // alone: after document.write the window may already be loaded, so the
     // handler would never fire. Fire on load if it's still pending, otherwise
     // fall back to a short timeout so SVG/layout has a frame to settle.
+    let printed = false;
     const triggerPrint = () => {
+      if (printed) return;
+      printed = true;
       try {
         printWindow.focus();
         printWindow.print();
@@ -57,12 +60,25 @@ export class PrintService {
       }
     };
 
+    // The Bravura music font (embedded @font-face) must finish loading in the
+    // print document before we print, or VexFlow glyphs render as tofu boxes.
+    const printWhenFontsReady = () => {
+      const fonts = printWindow.document.fonts;
+      if (fonts && typeof fonts.ready?.then === 'function') {
+        fonts.ready.then(triggerPrint);
+        // Safety net if the font promise stalls.
+        setTimeout(triggerPrint, 2500);
+      } else {
+        setTimeout(triggerPrint, 300);
+      }
+    };
+
     if (printWindow.document.readyState === 'complete') {
-      setTimeout(triggerPrint, 250);
+      printWhenFontsReady();
     } else {
-      printWindow.onload = () => setTimeout(triggerPrint, 250);
+      printWindow.onload = printWhenFontsReady;
       // Safety net in case onload never fires.
-      setTimeout(triggerPrint, 800);
+      setTimeout(printWhenFontsReady, 800);
     }
   }
 }

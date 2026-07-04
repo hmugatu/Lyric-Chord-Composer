@@ -7,6 +7,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as Tonal from '@tonaljs/tonal';
 import type { TabCell as TabCellT } from '../models/Tablature';
+import { cellsPerBarFor, getMeasureLayout } from '../utils/rowGeometry';
 
 interface StaffNotesProps {
   beatChords: string[];
@@ -135,6 +136,117 @@ const DURATION_TO_VF: Record<string, string> = {
   whole: 'w', half: 'h', quarter: 'q', eighth: '8', sixteenth: '16', 'thirty-second': '32',
 };
 
+export interface StaffRenderOptions {
+  width: number;
+  height: number;
+  numMeasures: number;
+  tsBeats: number;
+  tsBeatValue: number;
+  tuning: string[];
+  barTab: Record<string, TabCellT>;
+  rowStartBar: number;
+  scale: number;
+}
+
+/**
+ * Render one row of staff notation (from the tab model) into `container` as a
+ * VexFlow SVG. Shared by the on-screen StaffNotes component and the print
+ * service so printed staves match the editor exactly.
+ */
+export async function renderStaffToContainer(
+  container: HTMLElement,
+  { width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale }: StaffRenderOptions
+): Promise<void> {
+  const VexFlow = await import('vexflow');
+  const vf: any = (VexFlow as any).default || VexFlow;
+  const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, GhostNote } = vf;
+
+  container.innerHTML = '';
+
+  const renderer = new Renderer(container, Renderer.Backends.SVG);
+  renderer.resize(width, height);
+  const context = renderer.getContext();
+  // Scale glyphs down for a cleaner look; geometry below is expressed in
+  // real pixels and divided by `scale` so it lands at true pixel coords
+  // after the context multiplies by `scale`. This keeps measure bar lines
+  // aligned with the Tablature component, which uses identical pixel math.
+  context.scale(scale, scale);
+  context.setFont('Arial', 10);
+
+  // Measure widths in REAL pixels — shared with Tablature/print tab geometry.
+  const layout = getMeasureLayout(width, numMeasures);
+
+  for (let m = 0; m < numMeasures; m++) {
+    const xPos = layout.barLineXs[m];
+    const measureWidth = m === 0 ? layout.firstMeasureWidth : layout.otherMeasureWidth;
+
+    // Convert real-pixel geometry into draw space (context is scaled by `scale`).
+    const stave = new Stave(xPos / scale, 0, measureWidth / scale);
+    if (m === 0) {
+      stave.addClef('treble');
+      stave.addTimeSignature(`${tsBeats}/${tsBeatValue}`);
+    }
+    stave.setContext(context).draw();
+
+    const notes: any[] = [];
+
+    // Cells per bar on the 16th grid; each occupied cell becomes a staff
+    // note (stacked = chord). Empty cells become ghost notes for timing.
+    const cellsPerBar = cellsPerBarFor(tsBeats, tsBeatValue);
+    const bar = rowStartBar + m;
+
+    // Group this measure's tab cells by cell index -> { string: TabCell }.
+    const byCell = new Map<number, { string: number; cell: TabCellT }[]>();
+    for (const [key, cellData] of Object.entries(barTab || {})) {
+      const [b, cIdx, s] = key.split(':').map(Number);
+      if (b !== bar) continue;
+      if (cellData.fret === 'x') continue; // muted string -> no staff pitch
+      const list = byCell.get(cIdx) || [];
+      list.push({ string: s, cell: cellData });
+      byCell.set(cIdx, list);
+    }
+
+    // Default ghost-note duration = one 16th cell.
+    const cellDur = DURATION_TO_VF['sixteenth'];
+
+    for (let c = 0; c < cellsPerBar; c++) {
+      const group = byCell.get(c);
+      if (group && group.length > 0) {
+        const keys = group
+          .map((g) => fretToVexKey(g.string, g.cell.fret as number, tuning))
+          .filter((k): k is string => !!k);
+        if (keys.length === 0) {
+          notes.push(new GhostNote({ duration: cellDur }));
+          continue;
+        }
+        // Duration: use the longest chosen among stacked notes (they share a stem).
+        const durModel = group.find((g) => g.cell.duration)?.cell.duration || 'sixteenth';
+        const duration = DURATION_TO_VF[durModel] || cellDur;
+        const staveNote = new StaveNote({ keys, duration });
+        keys.forEach((k, i) => {
+          if (k.includes('#')) staveNote.addModifier(new Accidental('#'), i);
+          else if (k.includes('b') && !k.startsWith('b')) staveNote.addModifier(new Accidental('b'), i);
+        });
+        notes.push(staveNote);
+      } else {
+        notes.push(new GhostNote({ duration: cellDur }));
+      }
+    }
+
+    // Non-strict: chords-per-bar and the time signature don't always divide
+    // evenly (e.g. 8 slots in 3/4), so allow approximate tick sums rather
+    // than throwing. Fine for a guitar-forward chart.
+    const voice = new Voice({ numBeats: tsBeats, beatValue: tsBeatValue });
+    voice.setStrict(false);
+    voice.addTickables(notes);
+
+    // formatWidth is in draw space (stave was placed in draw space above).
+    const formatWidth = (m === 0 ? measureWidth - 80 : measureWidth - 20) / scale;
+    new Formatter().joinVoices([voice]).format([voice], formatWidth);
+    voice.draw(context, stave);
+  }
+}
+
 export const StaffNotes: React.FC<StaffNotesProps> = ({
   width,
   height,
@@ -151,110 +263,11 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderStaff = async () => {
-      try {
-        const VexFlow = await import('vexflow');
-        const vf: any = (VexFlow as any).default || VexFlow;
-        const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, GhostNote } = vf;
-
-        containerRef.current!.innerHTML = '';
-
-        const renderer = new Renderer(containerRef.current!, Renderer.Backends.SVG);
-        renderer.resize(width, height);
-        const context = renderer.getContext();
-        // Scale glyphs down for a cleaner look; geometry below is expressed in
-        // real pixels and divided by `scale` so it lands at true pixel coords
-        // after the context multiplies by `scale`. This keeps measure bar lines
-        // aligned with the Tablature component, which uses identical pixel math.
-        context.scale(scale, scale);
-        context.setFont('Arial', 10);
-
-        // Measure widths in REAL pixels — must match Tablature.tsx exactly.
-        const totalWidth = width - 20;
-        const firstMeasureWidth = totalWidth / numMeasures + 40;
-        const otherMeasureWidth = (totalWidth - firstMeasureWidth) / (numMeasures - 1);
-
-        for (let m = 0; m < numMeasures; m++) {
-          let xPos: number, measureWidth: number;
-          if (m === 0) {
-            xPos = 10;
-            measureWidth = firstMeasureWidth;
-          } else {
-            xPos = 10 + firstMeasureWidth + (m - 1) * otherMeasureWidth;
-            measureWidth = otherMeasureWidth;
-          }
-
-          // Convert real-pixel geometry into draw space (context is scaled by `scale`).
-          const stave = new Stave(xPos / scale, 0, measureWidth / scale);
-          if (m === 0) {
-            stave.addClef('treble');
-            stave.addTimeSignature(`${tsBeats}/${tsBeatValue}`);
-          }
-          stave.setContext(context).draw();
-
-          const notes: any[] = [];
-
-          // Cells per bar on the 16th grid; each occupied cell becomes a staff
-          // note (stacked = chord). Empty cells become ghost notes for timing.
-          const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
-          const bar = rowStartBar + m;
-
-          // Group this measure's tab cells by cell index -> { string: TabCell }.
-          const byCell = new Map<number, { string: number; cell: TabCellT }[]>();
-          for (const [key, cellData] of Object.entries(barTab || {})) {
-            const [b, cIdx, s] = key.split(':').map(Number);
-            if (b !== bar) continue;
-            if (cellData.fret === 'x') continue; // muted string -> no staff pitch
-            const list = byCell.get(cIdx) || [];
-            list.push({ string: s, cell: cellData });
-            byCell.set(cIdx, list);
-          }
-
-          // Default ghost-note duration = one 16th cell.
-          const cellDur = DURATION_TO_VF['sixteenth'];
-
-          for (let c = 0; c < cellsPerBar; c++) {
-            const group = byCell.get(c);
-            if (group && group.length > 0) {
-              const keys = group
-                .map((g) => fretToVexKey(g.string, g.cell.fret as number, tuning))
-                .filter((k): k is string => !!k);
-              if (keys.length === 0) {
-                notes.push(new GhostNote({ duration: cellDur }));
-                continue;
-              }
-              // Duration: use the longest chosen among stacked notes (they share a stem).
-              const durModel = group.find((g) => g.cell.duration)?.cell.duration || 'sixteenth';
-              const duration = DURATION_TO_VF[durModel] || cellDur;
-              const staveNote = new StaveNote({ keys, duration });
-              keys.forEach((k, i) => {
-                if (k.includes('#')) staveNote.addModifier(new Accidental('#'), i);
-                else if (k.includes('b') && !k.startsWith('b')) staveNote.addModifier(new Accidental('b'), i);
-              });
-              notes.push(staveNote);
-            } else {
-              notes.push(new GhostNote({ duration: cellDur }));
-            }
-          }
-
-          // Non-strict: chords-per-bar and the time signature don't always divide
-          // evenly (e.g. 8 slots in 3/4), so allow approximate tick sums rather
-          // than throwing. Fine for a guitar-forward chart.
-          const voice = new Voice({ numBeats: tsBeats, beatValue: tsBeatValue });
-          voice.setStrict(false);
-          voice.addTickables(notes);
-
-          // formatWidth is in draw space (stave was placed in draw space above).
-          const formatWidth = (m === 0 ? measureWidth - 80 : measureWidth - 20) / scale;
-          new Formatter().joinVoices([voice]).format([voice], formatWidth);
-          voice.draw(context, stave);
-        }
-      } catch (error) {
-        console.error('VexFlow render error:', error);
-      }
-    };
-
-    renderStaff();
+    renderStaffToContainer(containerRef.current, {
+      width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale,
+    }).catch((error) => {
+      console.error('VexFlow render error:', error);
+    });
   }, [barTab, tuning, rowStartBar, width, height, numMeasures, tsBeats, tsBeatValue, scale]);
 
   return (

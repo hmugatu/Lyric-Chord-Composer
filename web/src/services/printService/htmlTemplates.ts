@@ -5,7 +5,52 @@
 
 import { Composition, PageData, CompositionPages } from '../../models/Composition';
 import { ChordData, generateChordSvg, getUsedChords } from './chordSvgGenerator';
-import { generateNotesHtml, generateTablatureHtml } from './noteRenderer';
+import { generateTablatureHtml } from './noteRenderer';
+import { renderStaffToContainer } from '../../components/StaffNotes';
+import { cellsPerBarFor, getMeasureLayout, getSubdivisionX } from '../../utils/rowGeometry';
+import { shortChordName } from '../../utils/chordName';
+// Bravura is the music-notation font VexFlow renders its glyphs (noteheads,
+// clefs, rests) with. The print output lives in a separate document (popup /
+// expo-print) that never loaded VexFlow's runtime @font-face, so we embed the
+// font as a base64 @font-face in the print CSS — otherwise glyphs fall back to
+// tofu boxes. Vite gives us an app URL; we fetch it once and cache the data URI.
+import bravuraWoff2Url from '@vexflow-fonts/bravura/bravura.woff2?url';
+
+let bravuraDataUriPromise: Promise<string> | null = null;
+async function getBravuraDataUri(): Promise<string> {
+  if (!bravuraDataUriPromise) {
+    bravuraDataUriPromise = fetch(bravuraWoff2Url)
+      .then((r) => r.blob())
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          })
+      )
+      .catch((e) => {
+        console.error('Failed to inline Bravura font for print:', e);
+        return '';
+      });
+  }
+  return bravuraDataUriPromise;
+}
+
+// Row geometry for print output. Same relative proportions as the editor
+// (content starts at x=10, first measure wider by the clef reserve); the SVGs
+// scale to the printed page width via their viewBox.
+const ROW_WIDTH = 800;
+const TAB_HEIGHT = 65;
+// Taller than the 5-line stave so ledger-line notes below the staff
+// (low frets on the E/A strings) aren't clipped by the SVG viewport.
+const STAFF_HEIGHT = 120;
+const STAFF_SCALE = 0.75;
+// Fixed vertical crop window (in the 120px render space) applied to every
+// printed staff so all rows share one compact height and 16 bars fit a page.
+// At ROW_WIDTH=800 -> printed width ~750px, this renders ~140px tall.
+const STAFF_WINDOW = 120;
 
 export interface PrintOptions {
   includeChordDiagrams: boolean;
@@ -18,11 +63,11 @@ export interface PrintOptions {
 /**
  * Generate complete HTML document for printing
  */
-export function generatePrintHtml(
+export async function generatePrintHtml(
   composition: Composition,
   chordsData: ChordData[],
   options: PrintOptions
-): string {
+): Promise<string> {
   // Parse pages from composition notes
   let pages: PageData[] = [];
   if (composition.notes) {
@@ -33,19 +78,26 @@ export function generatePrintHtml(
       pages = [];
     }
   }
+  // Even a brand-new composition prints a full page of empty structure.
+  if (pages.length === 0) {
+    pages = [{ barLyrics: [], barBeatChords: [] }];
+  }
 
   const beatsPerBar = composition.globalSettings.chordsPerBar || 4;
-  const ts = composition.globalSettings.timeSignature;
-  const cellsPerBar = Math.max(1, Math.round((ts.beats * 16) / ts.beatValue));
   const usedChords = getUsedChords(pages, chordsData);
-  const styles = generatePrintStyles(options);
+  const bravuraDataUri = await getBravuraDataUri();
+  const styles = generatePrintStyles(options, bravuraDataUri);
   const header = generateHeaderHtml(composition);
   const chordReference = options.includeChordDiagrams
     ? generateChordReferenceHtml(usedChords)
     : '<div class="chord-reference-placeholder"></div>';
-  const pagesHtml = pages.map((page, index) =>
-    generatePageHtml(page, index + 1, pages.length, chordsData, options, beatsPerBar, cellsPerBar)
-  ).join('\n');
+  const pageHtmlParts: string[] = [];
+  for (let index = 0; index < pages.length; index++) {
+    pageHtmlParts.push(
+      await generatePageHtml(pages[index], index + 1, pages.length, options, beatsPerBar, composition, chordsData)
+    );
+  }
+  const pagesHtml = pageHtmlParts.join('\n');
 
   return `<!DOCTYPE html>
 <html>
@@ -69,8 +121,14 @@ export function generatePrintHtml(
  * Generate print-specific CSS styles
  * Uses flexible, natural layout that matches the on-screen paper view
  */
-function generatePrintStyles(options: PrintOptions): string {
+function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): string {
   return `
+    ${bravuraDataUri ? `@font-face {
+      font-family: 'Bravura';
+      src: url('${bravuraDataUri}') format('woff2');
+      font-display: block;
+    }` : ''}
+
     * {
       margin: 0;
       padding: 0;
@@ -105,36 +163,46 @@ function generatePrintStyles(options: PrintOptions): string {
       }
     }
 
-    /* Header Styles */
+    /* Header — single row: title on the left, all settings inline on the
+       right, matching the on-screen editor header. */
     .header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 0.3in;
-      border-bottom: none;
-      padding-bottom: 0.15in;
+      align-items: baseline;
+      gap: 0.3in;
+      margin-bottom: 0.15in;
+      padding-bottom: 0.1in;
+      border-bottom: 1px solid #ddd;
     }
 
     .title {
       font-size: 20pt;
       font-weight: bold;
       line-height: 1.3;
+      white-space: nowrap;
     }
 
     .artist {
       font-size: 12pt;
       font-style: italic;
       color: #666;
-      margin-top: 0.05in;
+      margin-left: 8pt;
     }
 
     .settings {
       display: flex;
-      flex-direction: column;
-      gap: 4pt;
-      font-size: 8pt;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 12pt;
+      font-size: 9pt;
       color: #555;
       text-align: right;
+      white-space: nowrap;
+    }
+
+    .settings b {
+      color: #333;
     }
 
     .settings span {
@@ -201,132 +269,53 @@ function generatePrintStyles(options: PrintOptions): string {
       margin-bottom: 0.1in;
     }
 
-    /* Bar Row - 4 bars across, natural height */
+    /* Bar Row - 4 bars across; tight vertical rhythm so all 16 bars fit on
+       one page. Only ~5px between a row's staff and the next row's lyrics. */
     .bar-row {
       display: flex;
       flex-direction: column;
       gap: 0;
-      margin-bottom: 2pt;
+      margin-bottom: 4pt;
       page-break-inside: avoid;
-    }
-
-    /* Individual Bar */
-    .bar {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      min-height: 40pt;
     }
 
     /* Lyrics — one line spanning the whole row, wraps instead of clipping. */
     .row-lyrics {
       font-size: 11pt;
       text-align: left;
-      margin-bottom: 3pt;
-      line-height: 1.25;
+      margin-bottom: 1pt;
+      line-height: 1.15;
       white-space: normal;
       overflow-wrap: break-word;
       word-break: break-word;
     }
 
-    /* Chord Row */
-    .chord-row {
-      display: flex;
-      gap: 1pt;
-      margin-bottom: 2pt;
-      justify-content: space-between;
-      min-height: 14pt;
-    }
-
-    /* Chord Box */
-    .chord-box {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 8pt;
-      font-weight: bold;
-      color: #000;
-      background: transparent;
-      border: none;
-      padding: 2pt;
-      line-height: 1;
-    }
-
-    .chord-box.empty {
-      visibility: hidden;
-    }
-
-    /* Measure (Staff) */
-    .measure {
-      flex: 1;
-      position: relative;
-      background: #fff;
-      border: none;
-      min-height: 45pt;
-      margin-bottom: 2pt;
-      page-break-inside: avoid;
-    }
-
-    /* Staff Lines */
-    .staff-lines {
-      position: absolute;
-      top: 20%;
-      left: 0;
-      right: 0;
-      height: 60%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .staff-line {
-      height: 0.5pt;
-      background: #333;
-    }
-
-    /* Tablature */
-    .tablature {
-      position: relative;
-      background: #fff;
-      border: none;
-      min-height: 18pt;
-      padding: 1pt 2pt;
-      font-family: 'Courier New', monospace;
-      font-size: 7pt;
-      line-height: 1.1;
-      page-break-inside: avoid;
-    }
-
-    /* Empty Bar Styling */
-    .empty-bar .measure {
-      background: #fff;
-    }
-
-    .empty-bar .tablature {
-      background: #fff;
-    }
-
-    /* Row-spanning Containers */
-    .bars-container {
-      display: flex;
-      flex-direction: row;
-      gap: 4pt;
+    /* Chord names — SVG row sharing the tab's measure geometry so each name
+       sits exactly over the tab column its frets were stamped to. */
+    .chord-names-row {
       width: 100%;
+      margin-bottom: 0;
     }
 
+    .chord-names-row svg {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Row-spanning Containers — no min-height / no padding; the SVGs are
+       already viewBox-cropped to their real content, so height comes from the
+       content itself, not reserved whitespace. */
+    /* Fixed heights keep all 16 bars on one page: the SVGs keep full width for
+       horizontal alignment but letterbox to these heights (xMidYMid meet), so a
+       note-heavy staff can't balloon the row. Tuned so 4 rows fit a Letter page. */
     .row-tablature {
       width: 100%;
       background: #fff;
       border: none;
-      min-height: 55pt;
-      padding: 2pt 0;
-      font-family: 'Courier New', monospace;
-      font-size: 7pt;
-      line-height: 1.1;
+      line-height: 0;
       page-break-inside: avoid;
-      margin-bottom: 0;
+      margin: 0;
     }
 
     .row-tablature svg {
@@ -339,35 +328,15 @@ function generatePrintStyles(options: PrintOptions): string {
       width: 100%;
       background: #fff;
       border: none;
-      min-height: 70pt;
-      padding: 2pt 0;
-      position: relative;
+      line-height: 0;
       page-break-inside: avoid;
-      margin-top: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      margin: 0;
     }
 
     .row-staff svg {
       display: block;
       width: 100%;
-      height: 100%;
-    }
-
-    .staff-background {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .staff-background svg {
-      width: 100%;
-      height: 100%;
+      height: auto;
     }
   `;
 }
@@ -383,15 +352,14 @@ function generateHeaderHtml(composition: Composition): string {
 
   return `
     <div class="header">
-      <div>
-        <div class="title">${escapeHtml(composition.title)}</div>
-        ${composition.artist ? `<div class="artist">${escapeHtml(composition.artist)}</div>` : ''}
+      <div class="title">
+        ${escapeHtml(composition.title)}${composition.artist ? `<span class="artist">${escapeHtml(composition.artist)}</span>` : ''}
       </div>
       <div class="settings">
-        <span>Key: ${escapeHtml(settings.key || 'C')}</span>
-        <span>Tempo: ${settings.tempo || 120} BPM</span>
-        <span>Time: ${timeSignature}</span>
-        ${settings.capo ? `<span>Capo: Fret ${settings.capo}</span>` : ''}
+        <span><b>Key:</b> ${escapeHtml(settings.key || 'C')}</span>
+        <span><b>Tempo:</b> ${settings.tempo || 120} BPM</span>
+        <span><b>Time:</b> ${timeSignature}</span>
+        <span><b>Capo:</b> ${settings.capo ? `Fret ${settings.capo}` : 'None'}</span>
       </div>
     </div>
   `;
@@ -420,118 +388,131 @@ function generateChordReferenceHtml(chords: ChordData[]): string {
 }
 
 /**
- * Generate staff lines SVG background
+ * Render one row's staff (VexFlow, from the tab model) off-screen in the main
+ * document and return it as an SVG string that scales to the printed width.
+ * This is the same renderer the editor uses, so print matches the screen.
  */
-function generateStaffLinesSvg(width: number, height: number): string {
-  const lineCount = 5;
-  const lineSpacing = height / (lineCount - 1);
-  
-  const lines = Array.from({ length: lineCount }).map((_, index) => {
-    const y = index * lineSpacing;
-    return `<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="#333" stroke-width="0.5" vector-effect="non-scaling-stroke" />`;
-  }).join('');
+async function generateStaffSvg(
+  barTab: Record<string, import('../../models/Tablature').TabCell>,
+  rowStartBar: number,
+  composition: Composition
+): Promise<string> {
+  const ts = composition.globalSettings.timeSignature;
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-10000px';
+  container.style.top = '0';
+  document.body.appendChild(container);
 
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
-      ${lines}
-    </svg>
-  `;
+  try {
+    await renderStaffToContainer(container, {
+      width: ROW_WIDTH,
+      height: STAFF_HEIGHT,
+      numMeasures: 4,
+      tsBeats: ts?.beats || 4,
+      tsBeatValue: ts?.beatValue || 4,
+      tuning: composition.globalSettings.tuning?.notes || ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
+      barTab,
+      rowStartBar,
+      scale: STAFF_SCALE,
+    });
+
+    const svg = container.querySelector('svg') as SVGSVGElement | null;
+    if (!svg) return '';
+    // Crop to a FIXED-height window anchored on the staff so every row prints
+    // the same compact height (letting all 16 bars fit one page) instead of
+    // note-heavy rows ballooning. The window is tall enough for the 5-line
+    // stave plus a few ledger positions each way; notes further out clip
+    // slightly rather than stretch the whole page. Centered on the content's
+    // vertical midpoint so notes above and below the staff share the room.
+    let vbY = 0, vbH = STAFF_WINDOW;
+    try {
+      const bbox = svg.getBBox();
+      const mid = bbox.y + bbox.height / 2;
+      vbY = mid - STAFF_WINDOW / 2;
+    } catch {
+      // getBBox can throw if not measurable; fall back to top of canvas.
+    }
+    svg.setAttribute('viewBox', `0 ${vbY} ${ROW_WIDTH} ${vbH}`);
+    svg.setAttribute('width', '100%');
+    svg.removeAttribute('height');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+    svg.removeAttribute('style');
+    return svg.outerHTML;
+  } catch (error) {
+    console.error('Print staff render failed:', error);
+    return '';
+  } finally {
+    container.remove();
+  }
 }
 
 /**
- * Generate HTML for a single page (16 bars)
+ * Generate HTML for a single page (always the full 4 rows x 4 bars = 16 bars,
+ * so empty bars still print as usable staff/tab structure).
  */
-function generatePageHtml(
+async function generatePageHtml(
   page: PageData,
   pageNumber: number,
   totalPages: number,
-  chordsData: ChordData[],
   options: PrintOptions,
-  beatsPerBar = 4,
-  cellsPerBar = 16
-): string {
+  beatsPerBar: number,
+  composition: Composition,
+  chordsData: ChordData[]
+): Promise<string> {
   const barsHtml: string[] = [];
-  const emptyBar = Array(beatsPerBar).fill('');
-  // The row renderers divide the 800px row width across all bars' slots.
-  const slotsPerRow = beatsPerBar * 4;
   const barTab = page.barTab || {};
+  const ts = composition.globalSettings.timeSignature;
+  const cellsPerBar = cellsPerBarFor(ts?.beats || 4, ts?.beatValue || 4);
+  const layout = getMeasureLayout(ROW_WIDTH, 4);
 
-  // Whether a bar has any user-entered tab frets.
-  const barHasTab = (bar: number) =>
-    Object.keys(barTab).some((k) => Number(k.split(':')[0]) === bar);
-
-  // 4 rows of 4 bars each
+  // 4 rows of 4 bars each — always rendered, content or not.
   for (let rowIndex = 0; rowIndex < 4; rowIndex++) {
-    // Collect all bar data for this row
-    const rowBarsData = [];
-    const rowBeatChords = [];
-    let rowHasContent = false;
+    const rowStartBar = rowIndex * 4;
 
-    for (let colIndex = 0; colIndex < 4; colIndex++) {
-      const barIndex = rowIndex * 4 + colIndex;
-      const lyrics = page.barLyrics[barIndex] || '';
-      const beatChords = page.barBeatChords[barIndex] || emptyBar;
-
-      const hasChords = beatChords.some(c => c && c.trim() !== '');
-      const hasLyrics = lyrics.trim() !== '';
-      const isEmpty = !hasChords && !hasLyrics && !barHasTab(barIndex);
-
-      rowBarsData.push({ lyrics, beatChords, hasChords, hasLyrics, isEmpty });
-      rowBeatChords.push(...beatChords);
-
-      if (!isEmpty) rowHasContent = true;
-    }
-
-    // Only render the staff/tab systems for rows that actually have content.
-    // Empty rows would otherwise print full-height blank staves and waste pages.
-    const renderSystems = rowHasContent;
-    const notesSvg = renderSystems && options.includeNotation ? generateNotesHtml(rowBeatChords, 800, 70, slotsPerRow) : '';
-    const tabSvg = renderSystems && options.includeTablature
-      ? generateTablatureHtml(rowBeatChords, chordsData, 800, 55, slotsPerRow, barTab, rowIndex * 4, cellsPerBar, 4)
+    const tabSvg = options.includeTablature
+      ? generateTablatureHtml(barTab, ROW_WIDTH, TAB_HEIGHT, cellsPerBar, rowStartBar, 4)
       : '';
-
-    // Skip empty rows entirely (no chords and no lyrics anywhere in the row).
-    if (!rowHasContent) {
-      continue;
-    }
+    const staffSvg = options.includeNotation
+      ? await generateStaffSvg(barTab, rowStartBar, composition)
+      : '';
 
     // Lyrics are authored as one line spanning the whole row (stored at the
     // first bar of the row), so render them once, full-width, above the bars.
-    const rowLyrics = rowBarsData[0]?.lyrics || '';
+    const rowLyrics = page.barLyrics[rowStartBar] || '';
 
-    let rowHtml = `
+    // Chord names as an SVG row using the same geometry as the tab. Each label
+    // sits at the 16th cell its frets were stamped to (see stampChordToTab),
+    // so chords line up exactly with their tab columns and staff notes.
+    const chordTexts: string[] = [];
+    for (let colIndex = 0; colIndex < 4; colIndex++) {
+      const barIndex = rowStartBar + colIndex;
+      const beatChords = page.barBeatChords[barIndex] || [];
+      beatChords.forEach((chordName, beatIndex) => {
+        if (!chordName || chordName.trim() === '') return;
+        const stampCell = Math.round((beatIndex / beatsPerBar) * cellsPerBar);
+        const x = getSubdivisionX(colIndex * cellsPerBar + stampCell, cellsPerBar, layout);
+        const chord = chordsData.find((c) => c.name === chordName);
+        const label = shortChordName(chordName, chord?.startingFret || 0);
+        chordTexts.push(
+          `<text x="${x}" y="12" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000" text-anchor="middle">${escapeHtml(label)}</text>`
+        );
+      });
+    }
+    const chordRowSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 ${ROW_WIDTH} 16" preserveAspectRatio="xMidYMid meet" style="display: block;">
+        ${chordTexts.join('')}
+      </svg>
+    `;
+
+    barsHtml.push(`
       <div class="bar-row">
         ${rowLyrics.trim() !== '' ? `<div class="row-lyrics">${escapeHtml(rowLyrics)}</div>` : ''}
+        <div class="chord-names-row">${chordRowSvg}</div>
         ${options.includeTablature ? `<div class="row-tablature">${tabSvg}</div>` : ''}
-        <div class="bars-container">
-    `;
-
-    // Generate individual bars for this row (chord boxes only; lyrics are
-    // rendered once per row above).
-    for (let colIndex = 0; colIndex < 4; colIndex++) {
-      const barData = rowBarsData[colIndex];
-
-      // Generate chord boxes - empty ones invisible, no borders
-      const chordBoxesHtml = barData.beatChords
-        .map(chord => {
-          const isEmpty = !chord || chord.trim() === '';
-          return `<div class="chord-box${isEmpty ? ' empty' : ''}">${isEmpty ? '' : escapeHtml(chord)}</div>`;
-        })
-        .join('');
-
-      rowHtml += `
-        <div class="bar${barData.isEmpty ? ' empty-bar' : ''}">
-          <div class="chord-row">${chordBoxesHtml}</div>
-        </div>
-      `;
-    }
-
-    rowHtml += `
-        </div>
-        ${options.includeNotation ? `<div class="row-staff"><div class="staff-background">${generateStaffLinesSvg(800, 70)}</div>${notesSvg}</div>` : ''}
+        ${options.includeNotation ? `<div class="row-staff">${staffSvg}</div>` : ''}
       </div>
-    `;
-    barsHtml.push(rowHtml);
+    `);
   }
 
   const pageBreak = pageNumber < totalPages ? ' page-break' : '';

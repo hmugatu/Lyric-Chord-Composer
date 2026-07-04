@@ -17,6 +17,7 @@
     "@tonaljs/chord": "^6.1.1",
     "@tonaljs/note": "^4.12.1",
     "@tonaljs/tonal": "^4.10.0",
+    "@vexflow-fonts/bravura": "^1.0.2",
     "immer": "^11.1.3",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

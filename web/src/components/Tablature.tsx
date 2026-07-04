@@ -12,6 +12,7 @@
 import React from 'react';
 import type { TabCell } from '../models/Tablature';
 import { formatFretWithTechniques } from '../utils/tabTechnique';
+import { CLEF_RESERVE, cellsPerBarFor, getMeasureLayout, getSubdivisionX } from '../utils/rowGeometry';
 
 interface ChordData {
   name: string;
@@ -58,53 +59,15 @@ export const Tablature: React.FC<TablatureProps> = ({
   barTab,
   onCellClick,
 }) => {
-  const totalWidth = width - 20;
-  const firstMeasureWidth = numMeasures > 1 ? totalWidth / numMeasures + 40 : totalWidth;
-  const otherMeasureWidth = numMeasures > 1 ? (totalWidth - firstMeasureWidth) / (numMeasures - 1) : 0;
-
-  // Space the staff reserves at the start of measure 1 for the clef + time
-  // signature, so the first measure's content lines up with the staff.
-  const CLEF_RESERVE = 40;
+  // Shared geometry (also used by the print service) keeps tab, staff, and
+  // print output aligned.
+  const layout = getMeasureLayout(width, numMeasures);
+  const { firstMeasureWidth, otherMeasureWidth } = layout;
 
   // 16th-note cells per bar, driven by the time signature.
-  const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
+  const cellsPerBar = cellsPerBarFor(tsBeats, tsBeatValue);
 
   const stringHeight = height / 6;
-
-  const getBarLinePositions = (): number[] => {
-    const positions: number[] = [];
-    let currentX = 10;
-    for (let m = 0; m <= numMeasures; m++) {
-      positions.push(currentX);
-      if (m === 0) {
-        currentX += firstMeasureWidth;
-      } else if (m < numMeasures) {
-        currentX += otherMeasureWidth;
-      }
-    }
-    return positions;
-  };
-
-  // X-centre of subdivision `idx` (0-based across all measures) given how many
-  // subdivisions each measure has. Used for both beats and 16th cells.
-  const getSubdivisionX = (idx: number, perBar: number): number => {
-    const measureIndex = Math.floor(idx / perBar);
-    const within = idx % perBar;
-
-    let measureStart = 10;
-    if (measureIndex > 0) {
-      measureStart = 10 + firstMeasureWidth + (measureIndex - 1) * otherMeasureWidth;
-    }
-    const measureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
-
-    if (measureIndex === 0) {
-      const usable = measureWidth - CLEF_RESERVE;
-      const w = usable / perBar;
-      return measureStart + CLEF_RESERVE + w * within + w / 2;
-    }
-    const w = measureWidth / perBar;
-    return measureStart + w * within + w / 2;
-  };
 
   const totalCells = cellsPerBar * numMeasures;
 
@@ -127,7 +90,7 @@ export const Tablature: React.FC<TablatureProps> = ({
         ))}
 
         {/* Vertical bar lines */}
-        {getBarLinePositions().map((xPos, index) => (
+        {layout.barLineXs.map((xPos, index) => (
           <div
             key={`bar-${index}`}
             style={{ position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#333', left: xPos }}
@@ -142,7 +105,7 @@ export const Tablature: React.FC<TablatureProps> = ({
             const localBar = bar - rowStartBar;
             if (localBar < 0 || localBar >= numMeasures) return null;
             const globalCell = localBar * cellsPerBar + cell;
-            const x = getSubdivisionX(globalCell, cellsPerBar);
+            const x = getSubdivisionX(globalCell, cellsPerBar, layout);
             const row = NUM_STRINGS - 1 - modelString; // display row
             const yPos = stringHeight * row + stringHeight / 2;
             const displayValue = formatFretWithTechniques(cellData.fret, cellData.techniques);
@@ -170,7 +133,7 @@ export const Tablature: React.FC<TablatureProps> = ({
         {/* INVISIBLE interactive 16th-note grid: one hit target per (cell, string) */}
         {onCellClick &&
           Array.from({ length: totalCells }, (_, globalCell) => {
-            const x = getSubdivisionX(globalCell, cellsPerBar);
+            const x = getSubdivisionX(globalCell, cellsPerBar, layout);
             const measureIndex = Math.floor(globalCell / cellsPerBar);
             const measureWidth = measureIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
             const cellW = Math.max(6, (measureWidth - (measureIndex === 0 ? CLEF_RESERVE : 0)) / cellsPerBar);

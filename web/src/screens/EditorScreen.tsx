@@ -21,6 +21,7 @@ import { StaffNotes } from '../components/StaffNotes';
 import { Tablature } from '../components/Tablature';
 import { ChordDiagram, MiniChordDiagram, ChordData } from '../components/ChordDiagram';
 import { shortChordName } from '../utils/chordName';
+import { CLEF_RESERVE, getMeasureLayout, getSubdivisionX } from '../utils/rowGeometry';
 import chordsDataJson from '../data/chords.json';
 
 interface PageState {
@@ -80,14 +81,9 @@ const DURATION_OPTIONS: { value: NoteDuration; label: string }[] = [
   { value: 'sixteenth', label: 'Sixteenth' },
 ];
 
-const totalMeasureWidth = CONTENT_WIDTH - 20;
-const firstMeasureWidth = totalMeasureWidth / 4 + 40;
-const otherMeasureWidth = (totalMeasureWidth - firstMeasureWidth) / 3;
-
-// Clef + time-signature space reserved at the start of measure 1. Must match
-// CLEF_RESERVE in Tablature.tsx and the clef width in StaffNotes so the chord
-// boxes, tab fret numbers, and staff notes all line up vertically.
-const CLEF_RESERVE = 40;
+// Shared per-row measure geometry (also used by Tablature/StaffNotes/print)
+// so the chord slots, tab fret numbers, and staff notes all line up vertically.
+const rowLayout = getMeasureLayout(CONTENT_WIDTH, 4);
 
 export const EditorScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -323,12 +319,17 @@ export const EditorScreen: React.FC = () => {
     const chordData = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
     if (chordData?.fingering) {
       // fingering is low->high [E A D G B e]; string index = position in array.
+      // Muted strings stamp as 'x' cells so the tab shows the full chord shape.
       chordData.fingering.forEach((f, s) => {
-        if (f !== 'x' && f !== '' && f != null) {
+        if (f !== '' && f != null) {
           const k = `${barIndex}:${cell}:${s}`;
           // Don't clobber a hand-entered note that's sitting on this exact cell.
           if (next[k] && next[k].source !== 'chord') return;
-          next[k] = { fret: parseInt(f, 10) || 0, duration: 'quarter', source: 'chord' };
+          next[k] = {
+            fret: f === 'x' ? 'x' : parseInt(f, 10) || 0,
+            duration: 'quarter',
+            source: 'chord',
+          };
         }
       });
     }
@@ -614,44 +615,39 @@ export const EditorScreen: React.FC = () => {
                     />
                   </Tooltip>
 
-                  {/* Chord boxes — 10px left offset matches the tab/staff internal
-                      start x so chord names sit over their beats. */}
-                  <Box sx={{ display: 'flex', flexDirection: 'row', mb: '5px', pl: '10px' }}>
+                  {/* Chord slots — each centered over the 16th cell its frets are
+                      stamped to (see stampChordToTab), so names line up with
+                      their tab columns. Same geometry as Tablature/print. */}
+                  <Box sx={{ position: 'relative', height: 24, mb: '5px' }}>
                     {[0, 1, 2, 3].map((colIndex) => {
                       const barIndex = rowIndex * 4 + colIndex;
-                      const barWidth = colIndex === 0 ? firstMeasureWidth : otherMeasureWidth;
-                      // Measure 1 reserves clef/time-sig space so its chord names
-                      // line up with the tab/staff, which do the same.
+                      const barWidth = colIndex === 0 ? rowLayout.firstMeasureWidth : rowLayout.otherMeasureWidth;
                       const reserve = colIndex === 0 ? CLEF_RESERVE : 0;
                       const beatWidth = (barWidth - reserve) / chordsPerBar;
                       const barSlots = barBeatChords[barIndex] || emptyBar;
-                      return (
-                        <Box key={colIndex} sx={{ width: barWidth }}>
-                          <Box sx={{ display: 'flex', flexDirection: 'row' }}>
-                            {reserve > 0 && <Box sx={{ width: reserve, flexShrink: 0 }} />}
-                            {Array.from({ length: chordsPerBar }, (_, beatIndex) => {
-                              const chordName = barSlots[beatIndex] || '';
-                              const chord = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
-                              const label = chordName ? shortChordName(chordName, chord?.startingFret) : '+';
-                              return (
-                                <Tooltip key={beatIndex} title={!chordName ? 'click to add chord' : chordName}>
-                                  <button
-                                    onClick={() => openChordSelector(barIndex, beatIndex)}
-                                    style={{
-                                      width: beatWidth, height: 24, background: 'transparent', border: 'none',
-                                      cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center',
-                                    }}
-                                  >
-                                    <span style={{ fontSize: chordName ? 10 : 14, fontWeight: 'bold', color: chordName ? '#000' : '#1976d2' }}>
-                                      {label}
-                                    </span>
-                                  </button>
-                                </Tooltip>
-                              );
-                            })}
-                          </Box>
-                        </Box>
-                      );
+                      return Array.from({ length: chordsPerBar }, (_, beatIndex) => {
+                        const chordName = barSlots[beatIndex] || '';
+                        const chord = chordName ? chordsData.find((c) => c.name === chordName) : undefined;
+                        const label = chordName ? shortChordName(chordName, chord?.startingFret) : '+';
+                        const stampCell = Math.round((beatIndex / chordsPerBar) * cellsPerBar);
+                        const x = getSubdivisionX(colIndex * cellsPerBar + stampCell, cellsPerBar, rowLayout);
+                        return (
+                          <Tooltip key={`${colIndex}-${beatIndex}`} title={!chordName ? 'click to add chord' : chordName}>
+                            <button
+                              onClick={() => openChordSelector(barIndex, beatIndex)}
+                              style={{
+                                position: 'absolute', left: x - beatWidth / 2, top: 0,
+                                width: beatWidth, height: 24, background: 'transparent', border: 'none',
+                                cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center',
+                              }}
+                            >
+                              <span style={{ fontSize: chordName ? 10 : 14, fontWeight: 'bold', color: chordName ? '#000' : '#1976d2' }}>
+                                {label}
+                              </span>
+                            </button>
+                          </Tooltip>
+                        );
+                      });
                     })}
                   </Box>
 
@@ -681,7 +677,7 @@ export const EditorScreen: React.FC = () => {
                     <StaffNotes
                       beatChords={rowBeatChords}
                       width={CONTENT_WIDTH}
-                      height={85}
+                      height={150}
                       numMeasures={4}
                       beatsPerBar={chordsPerBar}
                       tsBeats={currentComposition.globalSettings.timeSignature.beats}
