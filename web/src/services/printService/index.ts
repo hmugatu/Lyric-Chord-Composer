@@ -61,15 +61,26 @@ export class PrintService {
     };
 
     // The Bravura music font (embedded @font-face) must finish loading in the
-    // print document before we print, or VexFlow glyphs render as tofu boxes.
+    // print document before we print, or VexFlow glyphs render as tofu boxes /
+    // broken ledger lines. document.fonts.ready is NOT enough: it can resolve
+    // before Bravura is ever requested (webfonts load lazily on first use, and
+    // a freshly-written popup may not have triggered it yet). So explicitly
+    // request the font by name and wait for THAT load to settle.
     const printWhenFontsReady = () => {
       const fonts = printWindow.document.fonts;
-      if (fonts && typeof fonts.ready?.then === 'function') {
-        fonts.ready.then(triggerPrint);
-        // Safety net if the font promise stalls.
-        setTimeout(triggerPrint, 2500);
+      if (fonts && typeof fonts.load === 'function') {
+        // Force Bravura to load in the print document, then wait for the whole
+        // font set to settle before printing.
+        fonts
+          .load('40px Bravura')
+          .catch(() => undefined)
+          .then(() => fonts.ready)
+          .catch(() => undefined)
+          .then(() => triggerPrint());
+        // Safety net if a font promise stalls.
+        setTimeout(triggerPrint, 3000);
       } else {
-        setTimeout(triggerPrint, 300);
+        setTimeout(triggerPrint, 500);
       }
     };
 

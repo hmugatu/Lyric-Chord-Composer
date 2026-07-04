@@ -32,6 +32,8 @@ async function getBravuraDataUri(): Promise<string> {
       )
       .catch((e) => {
         console.error('Failed to inline Bravura font for print:', e);
+        // Don't cache a failure — let the next print retry the fetch.
+        bravuraDataUriPromise = null;
         return '';
       });
   }
