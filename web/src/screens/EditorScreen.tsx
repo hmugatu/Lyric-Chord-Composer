@@ -590,14 +590,14 @@ export const EditorScreen: React.FC = () => {
           )}
 
           {currentPage === 0 && uniqueChords.length > 0 && (
-            <Box sx={{ px: 2, py: 1.5, display: 'flex', gap: 1.5, overflowX: 'auto' }}>
+            <Box sx={{ px: 2, pt: 1, pb: 0, display: 'flex', gap: 1.5, overflowX: 'auto' }}>
               {uniqueChords.map((chord, index) => (
                 <MiniChordDiagram key={index} chord={chord} background={PAPER_COLOR} />
               ))}
             </Box>
           )}
 
-          <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, py: 3 }}>
+          <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: 3 }}>
             {[0, 1, 2, 3].map((rowIndex) => {
               const emptyBar = Array(chordsPerBar).fill('');
               const rowBeatChords = [0, 1, 2, 3]
@@ -605,11 +605,11 @@ export const EditorScreen: React.FC = () => {
                 .flat();
 
               return (
-                <Box key={rowIndex} sx={{ mb: 3 }}>
+                <Box key={rowIndex} sx={{ mb: '2px' }}>
                   {/* Lyrics for the row */}
                   <Tooltip title="click here to add lyrics!" placement="top-start">
                     <input
-                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', outline: 'none', padding: '2px 0', marginTop: 8, marginBottom: 8, minHeight: 30, fontSize: 18, color: '#333' }}
+                      style={{ width: CONTENT_WIDTH, background: 'transparent', border: 'none', borderBottom: '1px solid #ccc', outline: 'none', padding: '2px 0', marginTop: '2px', marginBottom: '2px', minHeight: 30, fontSize: 18, color: '#333' }}
                       value={barLyrics[rowIndex * 4] || ''}
                       onChange={(e) => handleLyricsChange(rowIndex * 4, e.target.value)}
                     />
@@ -670,10 +670,10 @@ export const EditorScreen: React.FC = () => {
                     />
                   </Box>
 
-                  <Box sx={{ height: 2 }} />
-
-                  {/* Staff */}
-                  <Box sx={{ py: '4px', bgcolor: PAPER_COLOR, height: 160, position: 'relative', overflow: 'hidden' }}>
+                  {/* Staff — pulled up ~5px so its top sits closer to the tab.
+                      Height hugs the stave (notes far below clip slightly, same
+                      tradeoff as print) so only ~2px sits before the next row. */}
+                  <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 95, position: 'relative', overflow: 'hidden' }}>
                     <StaffNotes
                       beatChords={rowBeatChords}
                       width={CONTENT_WIDTH}

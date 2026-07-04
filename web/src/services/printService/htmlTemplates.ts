@@ -231,7 +231,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       gap: 0.15in;
       justify-content: flex-start;
       align-items: flex-start;
-      margin-bottom: 10pt;
+      margin-bottom: 0;
     }
 
     .chord-diagram-item {
@@ -252,7 +252,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
 
     /* Pages Container */
     .pages-container {
-      margin-top: 0.2in;
+      margin-top: 4pt;
     }
 
     /* Sheet Page - Natural flow, no fixed height.
@@ -270,12 +270,12 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
     }
 
     /* Bar Row - 4 bars across; tight vertical rhythm so all 16 bars fit on
-       one page. Only ~5px between a row's staff and the next row's lyrics. */
+       one page. Only ~2px between a row's staff and the next row's lyrics. */
     .bar-row {
       display: flex;
       flex-direction: column;
       gap: 0;
-      margin-bottom: 4pt;
+      margin-bottom: 2px;
       page-break-inside: avoid;
     }
 
@@ -330,7 +330,8 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       border: none;
       line-height: 0;
       page-break-inside: avoid;
-      margin: 0;
+      /* Pull the staff up ~5px so its top sits closer to the tablature. */
+      margin: -5pt 0 0 0;
     }
 
     .row-staff svg {
