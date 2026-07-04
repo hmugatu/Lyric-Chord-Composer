@@ -37,9 +37,12 @@ const emptyPage = (slots = 4): PageState => ({
 });
 
 // Fixed paper dimensions: 1000px = 8.5", 1100px = 11" (100px per inch)
+// The editor sheet mirrors a printed US Letter page (8.5in x 11in) so what you
+// see on screen maps to what prints. Width is arbitrary px; height and margin
+// are derived from the real paper ratio at that width.
 const PAPER_WIDTH = 1000;
-const PAPER_HEIGHT = 1100;
-const PAPER_MARGIN = 50;
+const PAPER_HEIGHT = Math.round((PAPER_WIDTH * 11) / 8.5); // ~1294, Letter ratio
+const PAPER_MARGIN = Math.round((PAPER_WIDTH * 0.5) / 8.5); // 0.5in print margin -> ~59px
 const CONTENT_WIDTH = PAPER_WIDTH - PAPER_MARGIN * 2;
 
 // Aged parchment tone for the sheet-music paper (and the notation backgrounds
@@ -559,7 +562,10 @@ export const EditorScreen: React.FC = () => {
         <Box
           sx={{
             width: PAPER_WIDTH, minHeight: PAPER_HEIGHT, bgcolor: PAPER_COLOR, color: '#333',
-            border: '1px solid #ccc', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', my: 2,
+            border: '1px solid #ccc', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', my: 2,
+            // Top/bottom padding = the print margin, so content sits inside the
+            // same printable area a real Letter page has.
+            py: `${PAPER_MARGIN}px`,
           }}
         >
           {currentPage === 0 && (

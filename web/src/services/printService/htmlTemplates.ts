@@ -87,7 +87,7 @@ export async function generatePrintHtml(
   const usedChords = getUsedChords(pages, chordsData);
   const bravuraDataUri = await getBravuraDataUri();
   const styles = generatePrintStyles(options, bravuraDataUri);
-  const header = generateHeaderHtml(composition);
+  const header = generateHeaderHtml(composition, pages.length);
   const chordReference = options.includeChordDiagrams
     ? generateChordReferenceHtml(usedChords)
     : '<div class="chord-reference-placeholder"></div>';
@@ -142,6 +142,8 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
     }
 
     body {
+      /* Screen preview padding only; @page owns the real print margins so we
+         don't double them (which was the big white border). */
       padding: 0.5in;
       font-size: 11pt;
       line-height: 1.5;
@@ -151,6 +153,11 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       @page {
         size: ${options.pageSize === 'a4' ? 'A4' : 'letter'} ${options.orientation};
         margin: 0.5in;
+      }
+
+      /* Print: the 0.5in margin comes from @page, so drop the body padding. */
+      body {
+        padding: 0;
       }
 
       .page-break {
@@ -176,10 +183,15 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
     }
 
     .title {
-      font-size: 20pt;
+      font-size: 14pt;
       font-weight: bold;
       line-height: 1.3;
       white-space: nowrap;
+    }
+
+    /* Page indicator sits inline in the settings row, left of Capo. */
+    .page-indicator {
+      color: #999;
     }
 
     .artist {
@@ -262,13 +274,6 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       margin-bottom: 0.3in;
     }
 
-    .page-header {
-      font-size: 8pt;
-      color: #999;
-      text-align: right;
-      margin-bottom: 0.1in;
-    }
-
     /* Bar Row - 4 bars across; tight vertical rhythm so all 16 bars fit on
        one page. Only ~2px between a row's staff and the next row's lyrics. */
     .bar-row {
@@ -330,8 +335,8 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       border: none;
       line-height: 0;
       page-break-inside: avoid;
-      /* Pull the staff up ~5px so its top sits closer to the tablature. */
-      margin: -5pt 0 0 0;
+      /* Small top gap so the staff/clef doesn't tuck under the tab above. */
+      margin: 2pt 0 0 0;
     }
 
     .row-staff svg {
@@ -345,7 +350,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
 /**
  * Generate header HTML with composition info
  */
-function generateHeaderHtml(composition: Composition): string {
+function generateHeaderHtml(composition: Composition, totalPages: number): string {
   const settings = composition.globalSettings;
   const timeSignature = settings.timeSignature
     ? `${settings.timeSignature.beats}/${settings.timeSignature.beatValue}`
@@ -360,6 +365,7 @@ function generateHeaderHtml(composition: Composition): string {
         <span><b>Key:</b> ${escapeHtml(settings.key || 'C')}</span>
         <span><b>Tempo:</b> ${settings.tempo || 120} BPM</span>
         <span><b>Time:</b> ${timeSignature}</span>
+        <span class="page-indicator">Page 1 of ${totalPages}</span>
         <span><b>Capo:</b> ${settings.capo ? `Fret ${settings.capo}` : 'None'}</span>
       </div>
     </div>
@@ -520,7 +526,6 @@ async function generatePageHtml(
 
   return `
     <div class="sheet-page${pageBreak}">
-      <div class="page-header">Page ${pageNumber} of ${totalPages}</div>
       ${barsHtml.join('\n')}
     </div>
   `;
