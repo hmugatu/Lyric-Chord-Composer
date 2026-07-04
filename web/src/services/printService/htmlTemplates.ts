@@ -84,13 +84,9 @@ export async function generatePrintHtml(
   }
 
   const beatsPerBar = composition.globalSettings.chordsPerBar || 4;
-  const usedChords = getUsedChords(pages, chordsData);
   const bravuraDataUri = await getBravuraDataUri();
   const styles = generatePrintStyles(options, bravuraDataUri);
   const header = generateHeaderHtml(composition, pages.length);
-  const chordReference = options.includeChordDiagrams
-    ? generateChordReferenceHtml(usedChords)
-    : '<div class="chord-reference-placeholder"></div>';
   const pageHtmlParts: string[] = [];
   for (let index = 0; index < pages.length; index++) {
     pageHtmlParts.push(
@@ -109,7 +105,6 @@ export async function generatePrintHtml(
 </head>
 <body>
   ${header}
-  ${chordReference}
   <div class="pages-container">
     ${pagesHtml}
   </div>
@@ -223,10 +218,12 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       border: none;
     }
 
-    /* Chord Reference Section */
+    /* Chord Reference Section — left-align the diagrams with the tab/staff's
+       first bar line (drawn at x=10 of the 800-wide row = 1.25% inset) so the
+       chord charts share the same horizontal start as the notation below. */
     .chord-reference {
-      margin: 10pt 0 0 0;
-      padding: 0;
+      margin: 8pt 0 0 0;
+      padding: 0 0 0 0.6%;
       background: transparent;
       border: none;
       page-break-inside: avoid;
@@ -267,11 +264,31 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       margin-top: 4pt;
     }
 
-    /* Sheet Page - Natural flow, no fixed height.
-       Do NOT avoid page-break-inside here: forcing the whole page block to stay
-       together pushes all content off page 1, leaving it blank. Let rows flow. */
+    /* Sheet Page - fill the printable height. The per-page chord reference sits
+       at the top; the rows below distribute to fill the remaining space.
+       Do NOT avoid page-break-inside: forcing the whole block to stay together
+       pushes content off page 1, leaving it blank. */
     .sheet-page {
-      margin-bottom: 0.3in;
+      display: flex;
+      flex-direction: column;
+      /* Full printable height so the rows' space-between fills the page instead
+         of bunching at the top. Page 1 shares its height with the document
+         header above it, so .first-page gets a shorter target below. */
+      min-height: 9.6in;
+      margin-bottom: 0;
+    }
+
+    /* Page 1 also carries the document header above the pages container, so it
+       has less printable height to fill than later, header-less pages. */
+    .sheet-page.first-page {
+      min-height: 9.3in;
+    }
+
+    .sheet-rows {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     /* Bar Row - 4 bars across; tight vertical rhythm so all 16 bars fit on
@@ -473,6 +490,13 @@ async function generatePageHtml(
   const cellsPerBar = cellsPerBarFor(ts?.beats || 4, ts?.beatValue || 4);
   const layout = getMeasureLayout(ROW_WIDTH, 4);
 
+  // Chord reference for THIS page's chords, repeated at the top of every page
+  // (not just page 1) so players don't have to flip back.
+  const pageChords = getUsedChords([page], chordsData);
+  const chordReference = options.includeChordDiagrams && pageChords.length > 0
+    ? generateChordReferenceHtml(pageChords)
+    : '';
+
   // 4 rows of 4 bars each — always rendered, content or not.
   for (let rowIndex = 0; rowIndex < 4; rowIndex++) {
     const rowStartBar = rowIndex * 4;
@@ -523,10 +547,16 @@ async function generatePageHtml(
   }
 
   const pageBreak = pageNumber < totalPages ? ' page-break' : '';
+  // Page 1 shares its printable height with the document header above it, so it
+  // gets a shorter fill target than later (header-less) pages.
+  const firstClass = pageNumber === 1 ? ' first-page' : '';
 
   return `
-    <div class="sheet-page${pageBreak}">
-      ${barsHtml.join('\n')}
+    <div class="sheet-page${pageBreak}${firstClass}">
+      ${chordReference}
+      <div class="sheet-rows">
+        ${barsHtml.join('\n')}
+      </div>
     </div>
   `;
 }

@@ -488,13 +488,12 @@ export const EditorScreen: React.FC = () => {
     );
   }
 
-  // Unique chords across all pages, for the reference strip.
+  // Unique chords used on the CURRENT page, for the reference strip (matches
+  // print, which repeats each page's own chords at its top).
   const usedChordNames = new Set<string>();
-  allPages.forEach((page) => {
-    page.barBeatChords.forEach((bar) => {
-      bar.forEach((chord) => {
-        if (chord) usedChordNames.add(chord);
-      });
+  (allPages[currentPage]?.barBeatChords || []).forEach((bar) => {
+    bar.forEach((chord) => {
+      if (chord) usedChordNames.add(chord);
     });
   });
   const uniqueChords = Array.from(usedChordNames)
@@ -595,15 +594,23 @@ export const EditorScreen: React.FC = () => {
             </Box>
           )}
 
-          {currentPage === 0 && uniqueChords.length > 0 && (
-            <Box sx={{ px: 2, pt: 1, pb: 0, display: 'flex', gap: 1.5, overflowX: 'auto' }}>
+          {uniqueChords.length > 0 && (
+            // Sit in the content area (same margin as the tab/staff) and inset
+            // ~1.25% to line up with the tab's first bar line, so the chord
+            // charts share the notation's horizontal start. Shown on every page.
+            <Box
+              sx={{
+                width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pl: `${Math.max(0, CONTENT_WIDTH * 0.0125 - 5)}px`,
+                pt: 1, pb: 0, display: 'flex', gap: 1.5, flexWrap: 'wrap',
+              }}
+            >
               {uniqueChords.map((chord, index) => (
                 <MiniChordDiagram key={index} chord={chord} background={PAPER_COLOR} />
               ))}
             </Box>
           )}
 
-          <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: 3 }}>
+          <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: '10px' }}>
             {[0, 1, 2, 3].map((rowIndex) => {
               const emptyBar = Array(chordsPerBar).fill('');
               const rowBeatChords = [0, 1, 2, 3]
@@ -611,7 +618,9 @@ export const EditorScreen: React.FC = () => {
                 .flat();
 
               return (
-                <Box key={rowIndex} sx={{ mb: '2px' }}>
+                // Guaranteed gap below each row so a staff's low notes never
+                // collide with the next row's lyrics.
+                <Box key={rowIndex} sx={{ mb: '12px' }}>
                   {/* Lyrics for the row */}
                   <Tooltip title="click here to add lyrics!" placement="top-start">
                     <input
@@ -677,9 +686,10 @@ export const EditorScreen: React.FC = () => {
                   </Box>
 
                   {/* Staff — pulled up ~5px so its top sits closer to the tab.
-                      Height hugs the stave (notes far below clip slightly, same
-                      tradeoff as print) so only ~2px sits before the next row. */}
-                  <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 95, position: 'relative', overflow: 'hidden' }}>
+                      Height fits the stave plus a few ledger positions below so
+                      low chords aren't clipped; the row's mb keeps it clear of
+                      the next lyrics. */}
+                  <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 110, position: 'relative', overflow: 'hidden' }}>
                     <StaffNotes
                       beatChords={rowBeatChords}
                       width={CONTENT_WIDTH}
