@@ -445,6 +445,7 @@ async function generateStaffSvg(
       barTab,
       rowStartBar,
       scale: STAFF_SCALE,
+      keySignature: composition.globalSettings.key,
     });
 
     const svg = container.querySelector('svg') as SVGSVGElement | null;

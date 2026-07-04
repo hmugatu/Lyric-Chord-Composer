@@ -756,6 +756,7 @@ export const EditorScreen: React.FC = () => {
                       tsBeats={currentComposition.globalSettings.timeSignature.beats}
                       tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
                       tuning={currentComposition.globalSettings.tuning.notes}
+                      keySignature={currentComposition.globalSettings.key}
                       barTab={barTab}
                       rowStartBar={rowIndex * 4}
                     />

@@ -26,6 +26,8 @@ interface StaffNotesProps {
   /** Absolute bar index this row starts at. */
   rowStartBar?: number;
   scale?: number;
+  /** Composition key (e.g. "C", "G", "Am") for the staff key signature. */
+  keySignature?: string;
 }
 
 // VexFlow tick constants (a whole note = 4096 ticks).
@@ -131,6 +133,23 @@ function fretToVexKey(stringIndex: number, fret: number, tuning: string[]): stri
   }
 }
 
+// VexFlow key signatures it can draw (major keys + relative minors written
+// as "Xm"). Composition keys outside this set (e.g. Cb, Gb, D#m) are enharmonic
+// oddities we map to their playable equivalent or fall back to C (no signature).
+const VEX_KEY_SIGNATURES = new Set([
+  'C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#',
+  'F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Cb',
+  'Am', 'Em', 'Bm', 'F#m', 'C#m', 'G#m', 'D#m', 'A#m',
+  'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm', 'Abm',
+]);
+
+/** Normalize a composition key to a VexFlow-drawable key signature, or 'C'. */
+function toVexKeySignature(key?: string): string {
+  if (!key) return 'C';
+  const k = key.trim();
+  return VEX_KEY_SIGNATURES.has(k) ? k : 'C';
+}
+
 // Map a NoteDuration model value to a VexFlow duration string.
 const DURATION_TO_VF: Record<string, string> = {
   whole: 'w', half: 'h', quarter: 'q', eighth: '8', sixteenth: '16', 'thirty-second': '32',
@@ -146,6 +165,8 @@ export interface StaffRenderOptions {
   barTab: Record<string, TabCellT>;
   rowStartBar: number;
   scale: number;
+  /** Composition key (e.g. "C", "G", "Am", "Bb") for the staff key signature. */
+  keySignature?: string;
 }
 
 /**
@@ -155,7 +176,7 @@ export interface StaffRenderOptions {
  */
 export async function renderStaffToContainer(
   container: HTMLElement,
-  { width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale }: StaffRenderOptions
+  { width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale, keySignature }: StaffRenderOptions
 ): Promise<void> {
   const VexFlow = await import('vexflow');
   const vf: any = (VexFlow as any).default || VexFlow;
@@ -185,6 +206,15 @@ export async function renderStaffToContainer(
     if (m === 0) {
       stave.addClef('treble');
       stave.addTimeSignature(`${tsBeats}/${tsBeatValue}`);
+      const vfKey = toVexKeySignature(keySignature);
+      // C major / A minor have no accidentals — skip drawing an empty signature.
+      if (vfKey && vfKey !== 'C') {
+        try {
+          stave.addKeySignature(vfKey);
+        } catch {
+          /* Unknown key spelling — leave the staff without a signature. */
+        }
+      }
     }
     stave.setContext(context).draw();
 
@@ -272,6 +302,7 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
   barTab = {},
   rowStartBar = 0,
   scale = 0.75,
+  keySignature,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -279,11 +310,11 @@ export const StaffNotes: React.FC<StaffNotesProps> = ({
     if (!containerRef.current) return;
 
     renderStaffToContainer(containerRef.current, {
-      width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale,
+      width, height, numMeasures, tsBeats, tsBeatValue, tuning, barTab, rowStartBar, scale, keySignature,
     }).catch((error) => {
       console.error('VexFlow render error:', error);
     });
-  }, [barTab, tuning, rowStartBar, width, height, numMeasures, tsBeats, tsBeatValue, scale]);
+  }, [barTab, tuning, rowStartBar, width, height, numMeasures, tsBeats, tsBeatValue, scale, keySignature]);
 
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
