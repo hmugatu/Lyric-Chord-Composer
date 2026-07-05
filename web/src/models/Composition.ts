@@ -41,7 +41,7 @@ export interface GlobalSettings {
   timeSignature: TimeSignature;
   capo?: number;
   tuning: GuitarTuning;
-  /** Chord/tab slots per bar: 2, 4 (default), or 8. Must divide 4/4 cleanly. */
+  /** Chord/tab slots per bar: 1 (default), 2, 3, 4, 6, or 8. */
   chordsPerBar?: number;
   /** Lyric line spacing: 'stretch' justifies edge-to-edge, 'left' left-aligns. */
   lyricSpacing?: 'stretch' | 'left';

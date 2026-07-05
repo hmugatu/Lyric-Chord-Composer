@@ -138,7 +138,7 @@ export const EditorScreen: React.FC = () => {
   const [tuningNotes, setTuningNotes] = React.useState('');
   // Chords-per-bar is edited as a pending value in Settings and only committed
   // (re-slicing bars) on Save, so Cancel restores the previous value.
-  const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(4);
+  const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(1);
   const [pendingLyricSpacing, setPendingLyricSpacing] = React.useState<'stretch' | 'left'>('stretch');
   const [pendingShowStaff, setPendingShowStaff] = React.useState(true);
 

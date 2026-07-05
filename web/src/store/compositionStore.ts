@@ -56,7 +56,7 @@ const createDefaultGlobalSettings = (): GlobalSettings => ({
   timeSignature: { beats: 4, beatValue: 4 },
   capo: 0,
   tuning: STANDARD_TUNING,
-  chordsPerBar: 4,
+  chordsPerBar: 1,
 });
 
 const createNewComposition = (title: string, artist?: string): Composition => ({
