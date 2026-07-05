@@ -44,6 +44,8 @@ async function getBravuraDataUri(): Promise<string> {
 // (content starts at x=10, first measure wider by the clef reserve); the SVGs
 // scale to the printed page width via their viewBox.
 const ROW_WIDTH = 800;
+// A printed page is ROWS_PER_PAGE rows x 4 bars = 24 bars, matching the editor.
+const ROWS_PER_PAGE = 6;
 const TAB_HEIGHT = 65;
 // Taller than the 5-line stave so ledger-line notes below the staff
 // (low frets on the E/A strings) aren't clipped by the SVG viewport.
@@ -297,8 +299,9 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       justify-content: space-between;
     }
 
-    /* Bar Row - 4 bars across; tight vertical rhythm so all 16 bars fit on
-       one page. Only ~2px between a row's staff and the next row's lyrics. */
+    /* Bar Row - 4 bars across; tight vertical rhythm so all 24 bars (6 rows)
+       fit on one page. Only ~2px between a row's staff and the next row's
+       lyrics. Rows are kept whole across page breaks. */
     .bar-row {
       display: flex;
       flex-direction: column;
@@ -334,9 +337,10 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
     /* Row-spanning Containers — no min-height / no padding; the SVGs are
        already viewBox-cropped to their real content, so height comes from the
        content itself, not reserved whitespace. */
-    /* Fixed heights keep all 16 bars on one page: the SVGs keep full width for
-       horizontal alignment but letterbox to these heights (xMidYMid meet), so a
-       note-heavy staff can't balloon the row. Tuned so 4 rows fit a Letter page. */
+    /* The SVGs are viewBox-cropped to their real content and keep full width for
+       horizontal alignment (xMidYMid meet), so a note-heavy staff can't balloon
+       the row. With the staff hidden, 24 bars (6 rows) fit a Letter page with
+       room to spare; with the staff shown they pack tight and may spill. */
     .row-tablature {
       width: 100%;
       background: #fff;
@@ -559,7 +563,7 @@ async function generatePageHtml(
         ${rowLyrics.trim() !== '' ? `<div class="row-lyrics" style="${lyricAlign}">${escapeHtml(rowLyrics)}</div>` : ''}
         <div class="chord-names-row">${chordRowSvg}</div>
         ${options.includeTablature ? `<div class="row-tablature">${tabSvg}</div>` : ''}
-        ${options.includeNotation ? `<div class="row-staff">${staffSvg}</div>` : ''}
+        ${renderStaff ? `<div class="row-staff">${staffSvg}</div>` : ''}
       </div>
     `);
   }
