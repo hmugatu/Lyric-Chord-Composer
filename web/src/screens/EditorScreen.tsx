@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, IconButton, Tooltip, Typography, TextField, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, InputAdornment, Snackbar,
-  ToggleButton, ToggleButtonGroup, MenuItem, Popover,
+  ToggleButton, ToggleButtonGroup, MenuItem, Popover, Switch,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -990,15 +990,10 @@ export const EditorScreen: React.FC = () => {
                   Show the musical staff below each row
                 </Typography>
               </Box>
-              <ToggleButtonGroup
-                size="small"
-                exclusive
-                value={pendingShowStaff}
-                onChange={(_, v) => v !== null && setPendingShowStaff(v)}
-              >
-                <ToggleButton value={true}>Show</ToggleButton>
-                <ToggleButton value={false}>Hide</ToggleButton>
-              </ToggleButtonGroup>
+              <Switch
+                checked={pendingShowStaff}
+                onChange={(e) => setPendingShowStaff(e.target.checked)}
+              />
             </Box>
           </Box>
         </DialogContent>
