@@ -510,14 +510,19 @@ async function generatePageHtml(
     ? generateChordReferenceHtml(pageChords)
     : '';
 
-  // 4 rows of 4 bars each — always rendered, content or not.
-  for (let rowIndex = 0; rowIndex < 4; rowIndex++) {
+  // Staff notation prints only when both the print option AND the composition's
+  // showStaff setting allow it (setting defaults on).
+  const showStaff = composition.globalSettings.showStaff !== false;
+  const renderStaff = options.includeNotation && showStaff;
+
+  // ROWS_PER_PAGE rows of 4 bars each — always rendered, content or not.
+  for (let rowIndex = 0; rowIndex < ROWS_PER_PAGE; rowIndex++) {
     const rowStartBar = rowIndex * 4;
 
     const tabSvg = options.includeTablature
       ? generateTablatureHtml(barTab, ROW_WIDTH, TAB_HEIGHT, cellsPerBar, rowStartBar, 4)
       : '';
-    const staffSvg = options.includeNotation
+    const staffSvg = renderStaff
       ? await generateStaffSvg(barTab, rowStartBar, composition)
       : '';
 

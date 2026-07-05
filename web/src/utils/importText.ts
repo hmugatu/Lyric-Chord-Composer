@@ -54,9 +54,9 @@ export interface ImportResult {
   unmappedChords: string[];
 }
 
-const BARS_PER_PAGE = 16;
 const BARS_PER_ROW = 4;
-const ROWS_PER_PAGE = BARS_PER_PAGE / BARS_PER_ROW; // 4
+const ROWS_PER_PAGE = 6;
+const BARS_PER_PAGE = ROWS_PER_PAGE * BARS_PER_ROW; // 24
 
 // A chord token: root, optional accidental, optional quality/extension, optional
 // slash bass. Deliberately permissive — anything matching is treated as a chord.

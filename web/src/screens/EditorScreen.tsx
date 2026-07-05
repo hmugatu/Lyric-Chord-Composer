@@ -34,9 +34,14 @@ interface PageState {
   barTab?: Record<string, TabCell>;
 }
 
+// A page is a grid of rows x 4 bars. 6 rows -> 24 bars per page.
+const ROWS_PER_PAGE = 6;
+const BARS_PER_ROW = 4;
+const BARS_PER_PAGE = ROWS_PER_PAGE * BARS_PER_ROW; // 24
+
 const emptyPage = (slots = 4): PageState => ({
-  barLyrics: Array(16).fill(''),
-  barBeatChords: Array(16).fill(null).map(() => Array(slots).fill('')),
+  barLyrics: Array(BARS_PER_PAGE).fill(''),
+  barBeatChords: Array(BARS_PER_PAGE).fill(null).map(() => Array(slots).fill('')),
   barTab: {},
 });
 
@@ -135,6 +140,7 @@ export const EditorScreen: React.FC = () => {
   // (re-slicing bars) on Save, so Cancel restores the previous value.
   const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(4);
   const [pendingLyricSpacing, setPendingLyricSpacing] = React.useState<'stretch' | 'left'>('stretch');
+  const [pendingShowStaff, setPendingShowStaff] = React.useState(true);
 
   const [currentPage, setCurrentPage] = React.useState(0);
   const [allPages, setAllPages] = React.useState<PageState[]>([emptyPage()]);
@@ -152,11 +158,12 @@ export const EditorScreen: React.FC = () => {
 
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
   const lyricSpacing = currentComposition?.globalSettings.lyricSpacing || 'stretch';
+  const showStaff = currentComposition?.globalSettings.showStaff !== false; // default on
   const tsBeats = currentComposition?.globalSettings.timeSignature.beats || 4;
   const tsBeatValue = currentComposition?.globalSettings.timeSignature.beatValue || 4;
 
-  const barLyrics = allPages[currentPage]?.barLyrics || Array(16).fill('');
-  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(16).fill(null).map(() => Array(chordsPerBar).fill(''));
+  const barLyrics = allPages[currentPage]?.barLyrics || Array(BARS_PER_PAGE).fill('');
+  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(BARS_PER_PAGE).fill(null).map(() => Array(chordsPerBar).fill(''));
   const barTab = allPages[currentPage]?.barTab || {};
 
   // Persist the given pages array into the composition notes blob.
@@ -331,7 +338,7 @@ export const EditorScreen: React.FC = () => {
           setCurrentPage(0);
         } else if (barData.barChords) {
           const newBeatChords = barData.barChords.map((chord: string) => [chord, '', '', '']);
-          setAllPages([{ barLyrics: Array(16).fill(''), barBeatChords: newBeatChords }]);
+          setAllPages([{ barLyrics: Array(BARS_PER_PAGE).fill(''), barBeatChords: newBeatChords }]);
           setCurrentPage(0);
         }
       } catch {
@@ -460,6 +467,7 @@ export const EditorScreen: React.FC = () => {
   const openSettings = () => {
     setPendingChordsPerBar(chordsPerBar);
     setPendingLyricSpacing(lyricSpacing);
+    setPendingShowStaff(showStaff);
     setShowSettingsDialog(true);
   };
 
@@ -484,6 +492,7 @@ export const EditorScreen: React.FC = () => {
       timeSignature: { beats: parseInt(beats) || 4, beatValue: parseInt(beatValue) || 4 },
       tuning,
       lyricSpacing: pendingLyricSpacing,
+      showStaff: pendingShowStaff,
     });
     // Commit the chords-per-bar change (re-slices bars) only on Save.
     if (pendingChordsPerBar !== chordsPerBar) {
@@ -595,7 +604,7 @@ export const EditorScreen: React.FC = () => {
         </Button>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
           <Typography sx={{ fontWeight: 600 }}>Page {currentPage + 1} of {allPages.length}</Typography>
-          <Typography variant="caption" color="text.secondary">(16 bars per page)</Typography>
+          <Typography variant="caption" color="text.secondary">({BARS_PER_PAGE} bars per page)</Typography>
         </Box>
         <Button
           variant="outlined"
@@ -669,7 +678,7 @@ export const EditorScreen: React.FC = () => {
           )}
 
           <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: '10px' }}>
-            {[0, 1, 2, 3].map((rowIndex) => {
+            {Array.from({ length: ROWS_PER_PAGE }, (_, rowIndex) => {
               const emptyBar = Array(chordsPerBar).fill('');
               const rowBeatChords = [0, 1, 2, 3]
                 .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || emptyBar)
@@ -745,22 +754,25 @@ export const EditorScreen: React.FC = () => {
                   {/* Staff — pulled up ~5px so its top sits closer to the tab.
                       Height fits the stave plus a few ledger positions below so
                       low chords aren't clipped; the row's mb keeps it clear of
-                      the next lyrics. */}
-                  <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 110, position: 'relative', overflow: 'hidden' }}>
-                    <StaffNotes
-                      beatChords={rowBeatChords}
-                      width={CONTENT_WIDTH}
-                      height={150}
-                      numMeasures={4}
-                      beatsPerBar={chordsPerBar}
-                      tsBeats={currentComposition.globalSettings.timeSignature.beats}
-                      tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
-                      tuning={currentComposition.globalSettings.tuning.notes}
-                      keySignature={currentComposition.globalSettings.key}
-                      barTab={barTab}
-                      rowStartBar={rowIndex * 4}
-                    />
-                  </Box>
+                      the next lyrics. Hidden (and its height reclaimed) when the
+                      showStaff setting is off, leaving more room for 24 bars. */}
+                  {showStaff && (
+                    <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 110, position: 'relative', overflow: 'hidden' }}>
+                      <StaffNotes
+                        beatChords={rowBeatChords}
+                        width={CONTENT_WIDTH}
+                        height={150}
+                        numMeasures={4}
+                        beatsPerBar={chordsPerBar}
+                        tsBeats={currentComposition.globalSettings.timeSignature.beats}
+                        tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
+                        tuning={currentComposition.globalSettings.tuning.notes}
+                        keySignature={currentComposition.globalSettings.key}
+                        barTab={barTab}
+                        rowStartBar={rowIndex * 4}
+                      />
+                    </Box>
+                  )}
                 </Box>
               );
             })}
@@ -971,10 +983,27 @@ export const EditorScreen: React.FC = () => {
                 <ToggleButton value="stretch">Stretch</ToggleButton>
               </ToggleButtonGroup>
             </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
+                <Typography variant="body2">Staff notation</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Show the musical staff below each row
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={pendingShowStaff}
+                onChange={(_, v) => v !== null && setPendingShowStaff(v)}
+              >
+                <ToggleButton value={true}>Show</ToggleButton>
+                <ToggleButton value={false}>Hide</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setPendingLyricSpacing(lyricSpacing); setShowSettingsDialog(false); }}>Cancel</Button>
+          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setPendingLyricSpacing(lyricSpacing); setPendingShowStaff(showStaff); setShowSettingsDialog(false); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSettingsSave}>Save</Button>
         </DialogActions>
       </Dialog>

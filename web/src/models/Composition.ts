@@ -45,6 +45,8 @@ export interface GlobalSettings {
   chordsPerBar?: number;
   /** Lyric line spacing: 'stretch' justifies edge-to-edge, 'left' left-aligns. */
   lyricSpacing?: 'stretch' | 'left';
+  /** Show the musical staff notation below each row (default true). */
+  showStaff?: boolean;
 }
 
 export interface PageData {
