@@ -124,6 +124,10 @@ For detailed deployment instructions, iOS builds, troubleshooting, and app store
 
 This project is under active development. Contributions are welcome!
 
+Before making changes, read the [Development Workflow](docs/DEV_WORKFLOW.md) —
+the build → verify-in-the-real-app → commit → push-to-main loop and the
+guardrails that keep the editor and print output in sync.
+
 ## License
 
 MIT License
