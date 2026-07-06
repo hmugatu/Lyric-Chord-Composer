@@ -911,7 +911,7 @@ export const EditorScreen: React.FC = () => {
               )}
             </>
           )}
-          <Tooltip title="Rehearsal mode (two-page read-only view)">
+          <Tooltip title="Rehearsal mode">
             <IconButton onClick={() => setRehearsalMode(true)}><MenuBookIcon /></IconButton>
           </Tooltip>
           <Tooltip title="Print">
@@ -1030,15 +1030,26 @@ export const EditorScreen: React.FC = () => {
                 onChange={(e) => updateComposition({ title: e.target.value })}
                 placeholder="Untitled Song"
               />
+              {/* Header reference — each piece hidden by default, shown per its
+                  Settings toggle (see GlobalSettings show* flags). */}
               <Box sx={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                <Typography variant="caption"><b>Key:</b> {currentComposition.globalSettings.key}</Typography>
-                <Typography variant="caption"><b>Tempo:</b> ♩ = {currentComposition.globalSettings.tempo}</Typography>
-                <Typography variant="caption"><b>Capo:</b> {currentComposition.globalSettings.capo || 'None'}</Typography>
+                {currentComposition.globalSettings.showKey && (
+                  <Typography variant="caption"><b>Key:</b> {currentComposition.globalSettings.key}</Typography>
+                )}
+                {currentComposition.globalSettings.showTempo && (
+                  <Typography variant="caption"><b>Tempo:</b> ♩ = {currentComposition.globalSettings.tempo}</Typography>
+                )}
+                {currentComposition.globalSettings.showCapo && (
+                  <Typography variant="caption"><b>Capo:</b> {currentComposition.globalSettings.capo || 'None'}</Typography>
+                )}
+                {currentComposition.globalSettings.showTuning && (
+                  <Typography variant="caption"><b>Tuning:</b> {currentComposition.globalSettings.tuning.notes.map((n) => n.replace(/\d+$/, '')).join(' ')}</Typography>
+                )}
               </Box>
             </Box>
           )}
 
-          {uniqueChords.length > 0 && (
+          {uniqueChords.length > 0 && currentComposition.globalSettings.showChordDiagrams !== false && (
             // Sit in the content area (same margin as the tab/staff) and inset
             // ~1.25% to line up with the tab's first bar line, so the chord
             // charts share the notation's horizontal start. Shown on every page.
@@ -1390,6 +1401,26 @@ export const EditorScreen: React.FC = () => {
                 onChange={(e) => setPendingShowStaff(e.target.checked)}
               />
             </Box>
+
+            {/* Sheet header / reference visibility. These write immediately (no
+                re-slice needed). Key/Tempo/Capo/Tuning are hidden by default;
+                chord diagrams are shown by default. */}
+            <Typography variant="overline" color="text.secondary" sx={{ mt: 1 }}>Show on sheet</Typography>
+            {([
+              ['Key', 'showKey', currentComposition.globalSettings.showKey ?? false],
+              ['Tempo', 'showTempo', currentComposition.globalSettings.showTempo ?? false],
+              ['Capo', 'showCapo', currentComposition.globalSettings.showCapo ?? false],
+              ['Tuning', 'showTuning', currentComposition.globalSettings.showTuning ?? false],
+              ['Chord diagrams', 'showChordDiagrams', currentComposition.globalSettings.showChordDiagrams !== false],
+            ] as const).map(([label, flag, checked]) => (
+              <Box key={flag} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="body2">{label}</Typography>
+                <Switch
+                  checked={checked}
+                  onChange={(e) => updateGlobalSettings({ [flag]: e.target.checked })}
+                />
+              </Box>
+            ))}
           </Box>
         </DialogContent>
         <DialogActions>

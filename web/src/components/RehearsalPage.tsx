@@ -69,7 +69,18 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
         {pageNumber}
       </Box>
 
-      {uniqueChords.length > 0 && (
+      {/* Header reference on the first page (Key/Tempo/Capo/Tuning), each shown
+          per its Settings toggle — hidden by default. */}
+      {pageNumber === 1 && (settings.showKey || settings.showTempo || settings.showCapo || settings.showTuning) && (
+        <Box sx={{ width: contentWidth, mx: `${paperMargin}px`, pt: 0.5, pb: 0.5, display: 'flex', gap: 2, flexWrap: 'wrap', fontSize: 12, color: '#333' }}>
+          {settings.showKey && <span><b>Key:</b> {settings.key}</span>}
+          {settings.showTempo && <span><b>Tempo:</b> ♩ = {settings.tempo}</span>}
+          {settings.showCapo && <span><b>Capo:</b> {settings.capo || 'None'}</span>}
+          {settings.showTuning && <span><b>Tuning:</b> {settings.tuning.notes.map((n) => n.replace(/\d+$/, '')).join(' ')}</span>}
+        </Box>
+      )}
+
+      {uniqueChords.length > 0 && settings.showChordDiagrams !== false && (
         <Box
           sx={{
             width: contentWidth, mx: `${paperMargin}px`, pl: `${Math.max(0, contentWidth * 0.0125 - 5)}px`,

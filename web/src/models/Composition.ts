@@ -47,6 +47,16 @@ export interface GlobalSettings {
   lyricSpacing?: 'stretch' | 'left';
   /** Show the musical staff notation below each row (default true). */
   showStaff?: boolean;
+
+  // Sheet header/reference visibility. Key/Tempo/Capo/Tuning print in a header
+  // line on the first page; each is HIDDEN by default (undefined = false).
+  // Chord diagrams are SHOWN by default (undefined = true).
+  showKey?: boolean;
+  showTempo?: boolean;
+  showCapo?: boolean;
+  showTuning?: boolean;
+  /** Show the mini chord-diagram reference strip on each page (default true). */
+  showChordDiagrams?: boolean;
 }
 
 export interface PageData {

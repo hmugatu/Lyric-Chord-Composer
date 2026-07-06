@@ -391,11 +391,12 @@ function generateHeaderHtml(composition: Composition, totalPages: number): strin
         ${escapeHtml(composition.title)}${composition.artist ? `<span class="artist">${escapeHtml(composition.artist)}</span>` : ''}
       </div>
       <div class="settings">
-        <span><b>Key:</b> ${escapeHtml(settings.key || 'C')}</span>
-        <span><b>Tempo:</b> ${settings.tempo || 120} BPM</span>
+        ${settings.showKey ? `<span><b>Key:</b> ${escapeHtml(settings.key || 'C')}</span>` : ''}
+        ${settings.showTempo ? `<span><b>Tempo:</b> ${settings.tempo || 120} BPM</span>` : ''}
         <span><b>Time:</b> ${timeSignature}</span>
         <span class="page-indicator">Page 1 of ${totalPages}</span>
-        <span><b>Capo:</b> ${settings.capo ? `Fret ${settings.capo}` : 'None'}</span>
+        ${settings.showCapo ? `<span><b>Capo:</b> ${settings.capo ? `Fret ${settings.capo}` : 'None'}</span>` : ''}
+        ${settings.showTuning ? `<span><b>Tuning:</b> ${escapeHtml((settings.tuning?.notes || []).map((n) => n.replace(/\d+$/, '')).join(' '))}</span>` : ''}
       </div>
     </div>
   `;
@@ -512,7 +513,10 @@ async function generatePageHtml(
   // Chord reference for THIS page's chords, repeated at the top of every page
   // (not just page 1) so players don't have to flip back.
   const pageChords = getUsedChords([page], chordsData);
-  const chordReference = options.includeChordDiagrams && pageChords.length > 0
+  // Honor both the print option and the composition's show-chord-diagrams
+  // toggle (default shown).
+  const showChordDiagrams = composition.globalSettings.showChordDiagrams !== false;
+  const chordReference = options.includeChordDiagrams && showChordDiagrams && pageChords.length > 0
     ? generateChordReferenceHtml(pageChords)
     : '';
 
