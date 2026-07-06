@@ -27,6 +27,7 @@ import { PrintService } from '../services/printService';
 import { ImportTextDialog } from '../components/ImportTextDialog';
 import { ScanPhotoDialog } from '../components/ScanPhotoDialog';
 import { RehearsalView } from '../components/RehearsalView';
+import { CustomChordDialog } from '../components/CustomChordDialog';
 import { LyricLine } from '../components/LyricLine';
 import { textToPages } from '../utils/importText';
 import { noteToTabPosition } from '../utils/pitchDetect';
@@ -216,11 +217,21 @@ export const EditorScreen: React.FC = () => {
 
   const storageService = React.useMemo(() => new CompositionStorageService(), []);
   const printService = React.useMemo(() => new PrintService(), []);
-  const chordsData = React.useMemo(() => chordsDataJson as ChordData[], []);
+  // User-defined chords for this composition (persisted in the notes blob).
+  // Merged into chordsData so the picker, stamping, print, and rehearsal all
+  // resolve them by name for free.
+  const [customChords, setCustomChords] = React.useState<ChordData[]>([]);
+  const customChordsRef = React.useRef<ChordData[]>([]);
+  React.useEffect(() => { customChordsRef.current = customChords; }, [customChords]);
+  const chordsData = React.useMemo(
+    () => [...(chordsDataJson as ChordData[]), ...customChords],
+    [customChords],
+  );
   const availableChords = React.useMemo(() => chordsData.map((c) => c.name), [chordsData]);
 
   const [showSettingsDialog, setShowSettingsDialog] = React.useState(false);
   const [showChordModal, setShowChordModal] = React.useState(false);
+  const [showCustomChordDialog, setShowCustomChordDialog] = React.useState(false);
   const [showNewDialog, setShowNewDialog] = React.useState(false);
   const [showImportDialog, setShowImportDialog] = React.useState(false);
   const [showScanDialog, setShowScanDialog] = React.useState(false);
@@ -291,9 +302,14 @@ export const EditorScreen: React.FC = () => {
   const audioRefRef = React.useRef<AudioClipRef | null>(null);
   React.useEffect(() => { audioRefRef.current = audioRef; }, [audioRef]);
 
-  // Serialize the notes blob: pages plus the current audio clip reference.
+  // Serialize the notes blob: pages, the audio clip reference, and any
+  // per-composition custom chords.
   const notesJson = (pages: PageState[]) =>
-    JSON.stringify({ pages, audio: audioRefRef.current ?? undefined });
+    JSON.stringify({
+      pages,
+      audio: audioRefRef.current ?? undefined,
+      customChords: customChordsRef.current.length ? customChordsRef.current : undefined,
+    });
 
   // Persist the given pages array into the composition notes blob.
   const persistPages = (pages: PageState[]) => {
@@ -461,10 +477,12 @@ export const EditorScreen: React.FC = () => {
     setIsPlaying(false);
     setPlayhead(0);
     let parsedAudio: AudioClipRef | null = null;
+    let parsedCustomChords: ChordData[] = [];
     if (currentComposition.notes) {
       try {
         const barData = JSON.parse(currentComposition.notes);
         if (barData.audio) parsedAudio = barData.audio as AudioClipRef;
+        if (Array.isArray(barData.customChords)) parsedCustomChords = barData.customChords as ChordData[];
         if (barData.pages && Array.isArray(barData.pages)) {
           setAllPages(barData.pages);
           setCurrentPage(0);
@@ -486,6 +504,8 @@ export const EditorScreen: React.FC = () => {
     }
     setAudioRef(parsedAudio);
     audioRefRef.current = parsedAudio;
+    setCustomChords(parsedCustomChords);
+    customChordsRef.current = parsedCustomChords;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentComposition?.id]);
 
@@ -702,6 +722,19 @@ export const EditorScreen: React.FC = () => {
         setSelectedChordData(null);
       }, 400);
     }
+  };
+
+  // Save a new user-defined chord to this composition, persist it in the notes
+  // blob, and preselect it in the picker so it can be placed immediately.
+  const handleSaveCustomChord = (chord: ChordData) => {
+    const next = [...customChordsRef.current, chord];
+    customChordsRef.current = next;
+    setCustomChords(next);
+    persistPages(allPages); // writes customChords via notesJson
+    setShowCustomChordDialog(false);
+    setSelectedChordData(chord);
+    setChordSearchText('');
+    setSnackbar({ open: true, message: `Added custom chord "${chord.name}"` });
   };
 
   const filteredChords = availableChords.filter((c) =>
@@ -1267,6 +1300,7 @@ export const EditorScreen: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
+          <Button variant="outlined" onClick={() => setShowCustomChordDialog(true)} sx={{ mr: 'auto' }}>Add</Button>
           {selectedChordData && (
             <Button variant="contained" color="info" onClick={() => selectChord(selectedChordData.name)}>Select</Button>
           )}
@@ -1285,6 +1319,13 @@ export const EditorScreen: React.FC = () => {
           }}>Cancel</Button>
         </DialogActions>
       </Dialog>
+
+      <CustomChordDialog
+        open={showCustomChordDialog}
+        onClose={() => setShowCustomChordDialog(false)}
+        existingNames={availableChords}
+        onSave={handleSaveCustomChord}
+      />
 
       {/* Settings dialog */}
       <Dialog open={showSettingsDialog} onClose={() => setShowSettingsDialog(false)}>
