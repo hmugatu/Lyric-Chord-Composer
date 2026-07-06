@@ -16,8 +16,7 @@ import { ALTERNATE_TUNINGS } from '../models/Note';
 import type { NoteDuration } from '../models/Note';
 import type { TabCell, TabTechnique } from '../models/Tablature';
 import { CompositionStorageService } from '../services/compositionService';
-import { PrintService, PrintOptions } from '../services/printService';
-import { PrintDialog } from '../components/PrintDialog';
+import { PrintService } from '../services/printService';
 import { ImportTextDialog } from '../components/ImportTextDialog';
 import { LyricLine } from '../components/LyricLine';
 import { textToPages } from '../utils/importText';
@@ -123,7 +122,6 @@ export const EditorScreen: React.FC = () => {
   const availableChords = React.useMemo(() => chordsData.map((c) => c.name), [chordsData]);
 
   const [showSettingsDialog, setShowSettingsDialog] = React.useState(false);
-  const [showPrintDialog, setShowPrintDialog] = React.useState(false);
   const [showChordModal, setShowChordModal] = React.useState(false);
   const [showNewDialog, setShowNewDialog] = React.useState(false);
   const [showImportDialog, setShowImportDialog] = React.useState(false);
@@ -538,12 +536,17 @@ export const EditorScreen: React.FC = () => {
     }
   };
 
-  const handlePrint = async (options: PrintOptions) => {
+  const handlePrint = async () => {
     if (!currentComposition) return;
-    setShowPrintDialog(false);
     setIsPrinting(true);
     await new Promise((r) => setTimeout(r, 300));
-    const result = await printService.print(currentComposition, chordsData, options);
+    const result = await printService.print(currentComposition, chordsData, {
+      includeChordDiagrams: true,
+      includeTablature: true,
+      includeNotation: showStaff,
+      pageSize: 'letter',
+      orientation: 'portrait',
+    });
     if (!result.success) {
       setSnackbar({ open: true, message: result.error || 'Failed to print' });
     }
@@ -593,7 +596,7 @@ export const EditorScreen: React.FC = () => {
             <IconButton onClick={() => setShowImportDialog(true)}><PostAddIcon /></IconButton>
           </Tooltip>
           <Tooltip title="Print">
-            <span><IconButton onClick={() => setShowPrintDialog(true)} disabled={isPrinting}><PrintIcon /></IconButton></span>
+            <span><IconButton onClick={handlePrint} disabled={isPrinting}><PrintIcon /></IconButton></span>
           </Tooltip>
           <Tooltip title="Settings">
             <IconButton onClick={openSettings}><SettingsIcon /></IconButton>
@@ -1029,8 +1032,6 @@ export const EditorScreen: React.FC = () => {
           <Button variant="contained" onClick={handleNewSaveFirst} disabled={isSaving}>Save</Button>
         </DialogActions>
       </Dialog>
-
-      <PrintDialog open={showPrintDialog} onClose={() => setShowPrintDialog(false)} onPrint={handlePrint} />
 
       <ImportTextDialog
         open={showImportDialog}
