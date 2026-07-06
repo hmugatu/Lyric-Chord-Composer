@@ -191,6 +191,19 @@ const DURATION_OPTIONS: { value: NoteDuration; label: string }[] = [
 // so the chord slots, tab fret numbers, and staff notes all line up vertically.
 const rowLayout = getMeasureLayout(CONTENT_WIDTH, 4);
 
+// Fixed-width right-hand column so every settings toggle lines up vertically,
+// whether it sits beside a field or a labeled row.
+const TOGGLE_COL = 56;
+
+// A "show on sheet" switch in the aligned toggle column, beside a field.
+const SheetToggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({ checked, onChange }) => (
+  <Box sx={{ width: TOGGLE_COL, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+    <Tooltip title="Show on sheet">
+      <Switch size="small" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </Tooltip>
+  </Box>
+);
+
 export const EditorScreen: React.FC = () => {
   const navigate = useNavigate();
 
@@ -1278,32 +1291,124 @@ export const EditorScreen: React.FC = () => {
         <DialogTitle>Composition Settings</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1, minWidth: 320 }}>
-            <TextField select label="Key" value={key || 'C'} onChange={(e) => setKey(e.target.value)} size="small">
-              {KEY_OPTIONS.map((k) => (
-                <MenuItem key={k} value={k}>{k}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              type="number"
-              label="Tempo (BPM)"
-              value={tempo}
-              onChange={(e) => setTempo(e.target.value)}
-              size="small"
-              placeholder="120"
-              inputProps={{ min: 20, max: 400, step: 1 }}
-            />
-            <TextField
-              type="number"
-              label="Capo"
-              value={capo}
-              onChange={(e) => {
-                const n = Math.max(0, Math.min(12, parseInt(e.target.value) || 0));
-                setCapo(String(n));
-              }}
-              size="small"
-              placeholder="0"
-              inputProps={{ min: 0, max: 12, step: 1 }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField select label="Key" value={key || 'C'} onChange={(e) => setKey(e.target.value)} size="small" sx={{ flex: 1 }}>
+                {KEY_OPTIONS.map((k) => (
+                  <MenuItem key={k} value={k}>{k}</MenuItem>
+                ))}
+              </TextField>
+              <SheetToggle
+                checked={currentComposition.globalSettings.showKey ?? false}
+                onChange={(v) => updateGlobalSettings({ showKey: v })}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                type="number"
+                label="Tempo (BPM)"
+                value={tempo}
+                onChange={(e) => setTempo(e.target.value)}
+                size="small"
+                placeholder="120"
+                inputProps={{ min: 20, max: 400, step: 1 }}
+                sx={{ flex: 1 }}
+              />
+              <SheetToggle
+                checked={currentComposition.globalSettings.showTempo ?? false}
+                onChange={(v) => updateGlobalSettings({ showTempo: v })}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                type="number"
+                label="Capo"
+                value={capo}
+                onChange={(e) => {
+                  const n = Math.max(0, Math.min(12, parseInt(e.target.value) || 0));
+                  setCapo(String(n));
+                }}
+                size="small"
+                placeholder="0"
+                inputProps={{ min: 0, max: 12, step: 1 }}
+                sx={{ flex: 1 }}
+              />
+              <SheetToggle
+                checked={currentComposition.globalSettings.showCapo ?? false}
+                onChange={(v) => updateGlobalSettings({ showCapo: v })}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                select
+                label="Tuning"
+                size="small"
+                sx={{ flex: 1 }}
+                value={ALTERNATE_TUNINGS.some((t) => t.name === tuningName) ? tuningName : '__custom__'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__custom__') {
+                    // Switch to a custom tuning, seeding notes from the current one.
+                    setTuningName('Custom');
+                    if (!tuningNotes.trim()) {
+                      setTuningNotes((currentComposition.globalSettings.tuning.notes || []).join(' '));
+                    }
+                  } else {
+                    const preset = ALTERNATE_TUNINGS.find((t) => t.name === val);
+                    setTuningName(val);
+                    if (preset) setTuningNotes(preset.notes.join(' '));
+                  }
+                }}
+              >
+                {ALTERNATE_TUNINGS.map((t) => (
+                  <MenuItem key={t.name} value={t.name}>
+                    {t.name} ({t.notes.map((n) => n.replace(/\d+$/, '')).join(' ')})
+                  </MenuItem>
+                ))}
+                <MenuItem value="__custom__">Custom…</MenuItem>
+              </TextField>
+              <SheetToggle
+                checked={currentComposition.globalSettings.showTuning ?? false}
+                onChange={(v) => updateGlobalSettings({ showTuning: v })}
+              />
+            </Box>
+            {!ALTERNATE_TUNINGS.some((t) => t.name === tuningName) && (
+              <TextField
+                label="Custom tuning (low → high)"
+                size="small"
+                value={tuningNotes}
+                onChange={(e) => setTuningNotes(e.target.value)}
+                placeholder="e.g. D2 A2 D3 G3 B3 E4"
+                helperText="Six string notes, low to high, space-separated"
+              />
+            )}
+            {/* Display toggles grouped with the header settings, above the time
+                signature. Staff hidden by default; chord diagrams shown. */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
+                <Typography variant="body2">Staff notation</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Show the musical staff below each row
+                </Typography>
+              </Box>
+              <Box sx={{ width: TOGGLE_COL, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                <Switch size="small" checked={pendingShowStaff} onChange={(e) => setPendingShowStaff(e.target.checked)} />
+              </Box>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
+                <Typography variant="body2">Chord diagrams</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Show the chord reference strip on each page
+                </Typography>
+              </Box>
+              <Box sx={{ width: TOGGLE_COL, display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
+                <Switch
+                  size="small"
+                  checked={currentComposition.globalSettings.showChordDiagrams !== false}
+                  onChange={(e) => updateGlobalSettings({ showChordDiagrams: e.target.checked })}
+                />
+              </Box>
+            </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TextField select label="Beats" value={parseInt(beats) || 4} onChange={(e) => setBeats(String(e.target.value))} size="small" sx={{ flex: 1 }}>
                 {BEATS_OPTIONS.map((b) => (
@@ -1317,43 +1422,6 @@ export const EditorScreen: React.FC = () => {
                 ))}
               </TextField>
             </Box>
-            <TextField
-              select
-              label="Tuning"
-              size="small"
-              value={ALTERNATE_TUNINGS.some((t) => t.name === tuningName) ? tuningName : '__custom__'}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val === '__custom__') {
-                  // Switch to a custom tuning, seeding notes from the current one.
-                  setTuningName('Custom');
-                  if (!tuningNotes.trim()) {
-                    setTuningNotes((currentComposition.globalSettings.tuning.notes || []).join(' '));
-                  }
-                } else {
-                  const preset = ALTERNATE_TUNINGS.find((t) => t.name === val);
-                  setTuningName(val);
-                  if (preset) setTuningNotes(preset.notes.join(' '));
-                }
-              }}
-            >
-              {ALTERNATE_TUNINGS.map((t) => (
-                <MenuItem key={t.name} value={t.name}>
-                  {t.name} ({t.notes.map((n) => n.replace(/\d+$/, '')).join(' ')})
-                </MenuItem>
-              ))}
-              <MenuItem value="__custom__">Custom…</MenuItem>
-            </TextField>
-            {!ALTERNATE_TUNINGS.some((t) => t.name === tuningName) && (
-              <TextField
-                label="Custom tuning (low → high)"
-                size="small"
-                value={tuningNotes}
-                onChange={(e) => setTuningNotes(e.target.value)}
-                placeholder="e.g. D2 A2 D3 G3 B3 E4"
-                helperText="Six string notes, low to high, space-separated"
-              />
-            )}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
               <Box>
                 <Typography variant="body2">Chords per bar</Typography>
@@ -1389,38 +1457,6 @@ export const EditorScreen: React.FC = () => {
                 <ToggleButton value="stretch">Stretch</ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
-              <Box>
-                <Typography variant="body2">Staff notation</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Show the musical staff below each row
-                </Typography>
-              </Box>
-              <Switch
-                checked={pendingShowStaff}
-                onChange={(e) => setPendingShowStaff(e.target.checked)}
-              />
-            </Box>
-
-            {/* Sheet header / reference visibility. These write immediately (no
-                re-slice needed). Key/Tempo/Capo/Tuning are hidden by default;
-                chord diagrams are shown by default. */}
-            <Typography variant="overline" color="text.secondary" sx={{ mt: 1 }}>Show on sheet</Typography>
-            {([
-              ['Key', 'showKey', currentComposition.globalSettings.showKey ?? false],
-              ['Tempo', 'showTempo', currentComposition.globalSettings.showTempo ?? false],
-              ['Capo', 'showCapo', currentComposition.globalSettings.showCapo ?? false],
-              ['Tuning', 'showTuning', currentComposition.globalSettings.showTuning ?? false],
-              ['Chord diagrams', 'showChordDiagrams', currentComposition.globalSettings.showChordDiagrams !== false],
-            ] as const).map(([label, flag, checked]) => (
-              <Box key={flag} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Typography variant="body2">{label}</Typography>
-                <Switch
-                  checked={checked}
-                  onChange={(e) => updateGlobalSettings({ [flag]: e.target.checked })}
-                />
-              </Box>
-            ))}
           </Box>
         </DialogContent>
         <DialogActions>
