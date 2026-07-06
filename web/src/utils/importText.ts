@@ -55,8 +55,10 @@ export interface ImportResult {
 }
 
 const BARS_PER_ROW = 4;
-const ROWS_PER_PAGE = 6;
-const BARS_PER_PAGE = ROWS_PER_PAGE * BARS_PER_ROW; // 24
+// Max page size for allocation (7 rows = 28 bars). Actual pagination boundary
+// is passed in (16 with the staff shown, 28 without).
+const MAX_ROWS_PER_PAGE = 7;
+const BARS_PER_PAGE = MAX_ROWS_PER_PAGE * BARS_PER_ROW; // 28
 
 // A chord token: root, optional accidental, optional quality/extension, optional
 // slash bass. Deliberately permissive — anything matching is treated as a chord.
@@ -223,6 +225,8 @@ function stampFingering(
  * @param cellsPerBar 16th-note cells per bar (from time signature) for tab placement
  * @param barsPerLine how many bars each pasted line occupies before the next
  *        line continues; lines pack into consecutive bars (1|2|4)
+ * @param barsPerPage bars before a new page starts (16 with the staff shown,
+ *        24 without). Pages are still allocated at the max size (24).
  */
 export function textToPages(
   text: string,
@@ -230,10 +234,13 @@ export function textToPages(
   catalog: ChordFingering[],
   cellsPerBar: number,
   barsPerLine = 2,
+  barsPerPage = BARS_PER_PAGE,
 ): ImportResult {
   const slots = chordsPerBar > 0 ? chordsPerBar : 4;
   const cells = cellsPerBar > 0 ? cellsPerBar : 16;
   const spread = Math.min(BARS_PER_ROW, Math.max(1, barsPerLine));
+  // Round to whole rows so a page never splits mid-row.
+  const pageBars = Math.max(BARS_PER_ROW, Math.round(barsPerPage / BARS_PER_ROW) * BARS_PER_ROW);
   const noteDuration = durationForSlots(slots);
   const index = buildCatalogIndex(catalog);
   const blocks = parseLines(cleanInput(text));
@@ -243,10 +250,11 @@ export function textToPages(
   const filledRowSet = new Set<number>(); // global row indices that got a lyric
 
   // Resolve a global bar index to its page + local bar, creating pages as needed.
+  // Pagination boundary is `pageBars` (16 or 24); pages are allocated at max size.
   const barAt = (globalBar: number) => {
-    const pageIdx = Math.floor(globalBar / BARS_PER_PAGE);
+    const pageIdx = Math.floor(globalBar / pageBars);
     while (pages.length <= pageIdx) pages.push(emptyPage(slots));
-    return { page: pages[pageIdx], localBar: globalBar % BARS_PER_PAGE };
+    return { page: pages[pageIdx], localBar: globalBar % pageBars };
   };
 
   // Pack lines into consecutive bars (reading order). Each line occupies `spread`

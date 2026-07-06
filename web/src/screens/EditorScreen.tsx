@@ -34,14 +34,21 @@ interface PageState {
   barTab?: Record<string, TabCell>;
 }
 
-// A page is a grid of rows x 4 bars. 6 rows -> 24 bars per page.
-const ROWS_PER_PAGE = 6;
+// A page is a grid of rows x 4 bars. Rows shown depend on the staff toggle:
+// with the staff there's room for 4 rows (16 bars); without it, 7 rows (28 bars).
+// Page data is always allocated at the larger size so toggling never drops bars.
 const BARS_PER_ROW = 4;
-const BARS_PER_PAGE = ROWS_PER_PAGE * BARS_PER_ROW; // 24
+const ROWS_WITH_STAFF = 4;
+const ROWS_WITHOUT_STAFF = 7; // 28 bars — fills the page height without the staff
+const MAX_ROWS_PER_PAGE = ROWS_WITHOUT_STAFF;
+const MAX_BARS_PER_PAGE = MAX_ROWS_PER_PAGE * BARS_PER_ROW; // 24
+
+// How many rows/bars are visible for the current staff setting.
+const rowsForStaff = (showStaff: boolean) => (showStaff ? ROWS_WITH_STAFF : ROWS_WITHOUT_STAFF);
 
 const emptyPage = (slots = 4): PageState => ({
-  barLyrics: Array(BARS_PER_PAGE).fill(''),
-  barBeatChords: Array(BARS_PER_PAGE).fill(null).map(() => Array(slots).fill('')),
+  barLyrics: Array(MAX_BARS_PER_PAGE).fill(''),
+  barBeatChords: Array(MAX_BARS_PER_PAGE).fill(null).map(() => Array(slots).fill('')),
   barTab: {},
 });
 
@@ -159,11 +166,15 @@ export const EditorScreen: React.FC = () => {
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
   const lyricSpacing = currentComposition?.globalSettings.lyricSpacing || 'stretch';
   const showStaff = currentComposition?.globalSettings.showStaff !== false; // default on
+  // Rows/bars shown per page depend on the staff: 4 rows (16 bars) with the
+  // staff, 7 rows (28 bars) without it. Data is stored at MAX size regardless.
+  const visibleRows = rowsForStaff(showStaff);
+  const visibleBars = visibleRows * BARS_PER_ROW;
   const tsBeats = currentComposition?.globalSettings.timeSignature.beats || 4;
   const tsBeatValue = currentComposition?.globalSettings.timeSignature.beatValue || 4;
 
-  const barLyrics = allPages[currentPage]?.barLyrics || Array(BARS_PER_PAGE).fill('');
-  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(BARS_PER_PAGE).fill(null).map(() => Array(chordsPerBar).fill(''));
+  const barLyrics = allPages[currentPage]?.barLyrics || Array(MAX_BARS_PER_PAGE).fill('');
+  const barBeatChords = allPages[currentPage]?.barBeatChords || Array(MAX_BARS_PER_PAGE).fill(null).map(() => Array(chordsPerBar).fill(''));
   const barTab = allPages[currentPage]?.barTab || {};
 
   // Persist the given pages array into the composition notes blob.
@@ -186,7 +197,7 @@ export const EditorScreen: React.FC = () => {
   // its pages. Prompts first when there is existing content to overwrite.
   const runImport = (text: string, barsPerLine: number, importChordsPerBar: number) => {
     const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
-    const result = textToPages(text, importChordsPerBar, chordsData, cellsPerBar, barsPerLine);
+    const result = textToPages(text, importChordsPerBar, chordsData, cellsPerBar, barsPerLine, visibleBars);
     setAllPages(result.pages);
     setCurrentPage(0);
     if (currentComposition) {
@@ -338,7 +349,7 @@ export const EditorScreen: React.FC = () => {
           setCurrentPage(0);
         } else if (barData.barChords) {
           const newBeatChords = barData.barChords.map((chord: string) => [chord, '', '', '']);
-          setAllPages([{ barLyrics: Array(BARS_PER_PAGE).fill(''), barBeatChords: newBeatChords }]);
+          setAllPages([{ barLyrics: Array(MAX_BARS_PER_PAGE).fill(''), barBeatChords: newBeatChords }]);
           setCurrentPage(0);
         }
       } catch {
@@ -604,7 +615,7 @@ export const EditorScreen: React.FC = () => {
         </Button>
         <Box sx={{ flex: 1, textAlign: 'center' }}>
           <Typography sx={{ fontWeight: 600 }}>Page {currentPage + 1} of {allPages.length}</Typography>
-          <Typography variant="caption" color="text.secondary">({BARS_PER_PAGE} bars per page)</Typography>
+          <Typography variant="caption" color="text.secondary">({visibleBars} bars per page)</Typography>
         </Box>
         <Button
           variant="outlined"
@@ -678,7 +689,7 @@ export const EditorScreen: React.FC = () => {
           )}
 
           <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: '10px' }}>
-            {Array.from({ length: ROWS_PER_PAGE }, (_, rowIndex) => {
+            {Array.from({ length: visibleRows }, (_, rowIndex) => {
               const emptyBar = Array(chordsPerBar).fill('');
               const rowBeatChords = [0, 1, 2, 3]
                 .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || emptyBar)
@@ -722,7 +733,7 @@ export const EditorScreen: React.FC = () => {
                                 cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center',
                               }}
                             >
-                              <span style={{ fontSize: chordName ? 10 : 14, fontWeight: 'bold', color: chordName ? '#000' : '#1976d2' }}>
+                              <span style={{ fontSize: chordName ? 14 : 14, fontWeight: 'bold', color: chordName ? '#000' : '#1976d2' }}>
                                 {label}
                               </span>
                             </button>
@@ -755,7 +766,7 @@ export const EditorScreen: React.FC = () => {
                       Height fits the stave plus a few ledger positions below so
                       low chords aren't clipped; the row's mb keeps it clear of
                       the next lyrics. Hidden (and its height reclaimed) when the
-                      showStaff setting is off, leaving more room for 24 bars. */}
+                      showStaff setting is off, leaving more room for 28 bars. */}
                   {showStaff && (
                     <Box sx={{ pt: 0, pb: 0, mt: '-5px', bgcolor: PAPER_COLOR, height: 110, position: 'relative', overflow: 'hidden' }}>
                       <StaffNotes

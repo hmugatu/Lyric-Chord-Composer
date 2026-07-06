@@ -44,8 +44,10 @@ async function getBravuraDataUri(): Promise<string> {
 // (content starts at x=10, first measure wider by the clef reserve); the SVGs
 // scale to the printed page width via their viewBox.
 const ROW_WIDTH = 800;
-// A printed page is ROWS_PER_PAGE rows x 4 bars = 24 bars, matching the editor.
-const ROWS_PER_PAGE = 6;
+// Rows per printed page depend on the staff: 4 rows (16 bars) with the staff,
+// 7 rows (28 bars) without it — matching the editor.
+const ROWS_WITH_STAFF = 4;
+const ROWS_WITHOUT_STAFF = 7;
 const TAB_HEIGHT = 65;
 // Taller than the 5-line stave so ledger-line notes below the staff
 // (low frets on the E/A strings) aren't clipped by the SVG viewport.
@@ -299,7 +301,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
       justify-content: space-between;
     }
 
-    /* Bar Row - 4 bars across; tight vertical rhythm so all 24 bars (6 rows)
+    /* Bar Row - 4 bars across; tight vertical rhythm so all 28 bars (7 rows)
        fit on one page. Only ~2px between a row's staff and the next row's
        lyrics. Rows are kept whole across page breaks. */
     .bar-row {
@@ -339,7 +341,7 @@ function generatePrintStyles(options: PrintOptions, bravuraDataUri: string): str
        content itself, not reserved whitespace. */
     /* The SVGs are viewBox-cropped to their real content and keep full width for
        horizontal alignment (xMidYMid meet), so a note-heavy staff can't balloon
-       the row. With the staff hidden, 24 bars (6 rows) fit a Letter page with
+       the row. With the staff hidden, 28 bars (7 rows) fit a Letter page with
        room to spare; with the staff shown they pack tight and may spill. */
     .row-tablature {
       width: 100%;
@@ -519,8 +521,10 @@ async function generatePageHtml(
   const showStaff = composition.globalSettings.showStaff !== false;
   const renderStaff = options.includeNotation && showStaff;
 
-  // ROWS_PER_PAGE rows of 4 bars each — always rendered, content or not.
-  for (let rowIndex = 0; rowIndex < ROWS_PER_PAGE; rowIndex++) {
+  // Rows of 4 bars each — 4 rows (16 bars) when the staff is drawn, 7 (28 bars)
+  // when it isn't, matching the editor. Always rendered, content or not.
+  const rowsThisPage = renderStaff ? ROWS_WITH_STAFF : ROWS_WITHOUT_STAFF;
+  for (let rowIndex = 0; rowIndex < rowsThisPage; rowIndex++) {
     const rowStartBar = rowIndex * 4;
 
     const tabSvg = options.includeTablature
@@ -548,12 +552,12 @@ async function generatePageHtml(
         const chord = chordsData.find((c) => c.name === chordName);
         const label = shortChordName(chordName, chord?.startingFret || 0);
         chordTexts.push(
-          `<text x="${x}" y="12" font-size="10" font-family="Arial, sans-serif" font-weight="bold" fill="#000" text-anchor="middle">${escapeHtml(label)}</text>`
+          `<text x="${x}" y="15" font-size="14" font-family="Arial, sans-serif" font-weight="bold" fill="#000" text-anchor="middle">${escapeHtml(label)}</text>`
         );
       });
     }
     const chordRowSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 ${ROW_WIDTH} 16" preserveAspectRatio="xMidYMid meet" style="display: block;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 ${ROW_WIDTH} 20" preserveAspectRatio="xMidYMid meet" style="display: block;">
         ${chordTexts.join('')}
       </svg>
     `;
