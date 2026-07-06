@@ -51,6 +51,70 @@ const emptyPage = (slots = 4): PageState => ({
   barTab: {},
 });
 
+// A single bar lifted out of its page, carrying everything indexed by bar.
+interface FlatBar {
+  lyric: string;
+  chords: string[];
+  // tab cells for this bar, keyed by `cell:string` (bar index dropped).
+  tab: Record<string, TabCell>;
+}
+
+// Flatten pages into one continuous sequence of bars, trimming trailing empties
+// so blank tail bars from a smaller page size don't force extra pages later.
+// `oldBarsPerPage` is how many bars were actually *visible* per page under the
+// staff state the pages were built with — only those are lifted. Pages always
+// store MAX_BARS_PER_PAGE (24) slots, but with the staff on only 16 are shown;
+// pulling the hidden 17–24 padding slots would inject blank bars mid-sequence
+// and balloon the page count on reflow.
+const flattenPages = (pages: PageState[], slots: number, oldBarsPerPage: number): FlatBar[] => {
+  const bars: FlatBar[] = [];
+  pages.forEach((page) => {
+    const tabByBar: Record<number, Record<string, TabCell>> = {};
+    Object.entries(page.barTab || {}).forEach(([key, cell]) => {
+      const [bar, c, s] = key.split(':');
+      (tabByBar[Number(bar)] ||= {})[`${c}:${s}`] = cell;
+    });
+    for (let i = 0; i < oldBarsPerPage; i++) {
+      bars.push({
+        lyric: page.barLyrics[i] || '',
+        chords: page.barBeatChords[i] || Array(slots).fill(''),
+        tab: tabByBar[i] || {},
+      });
+    }
+  });
+  // Drop trailing bars with no lyric, no chord, and no tab.
+  let end = bars.length;
+  while (end > 0) {
+    const b = bars[end - 1];
+    const empty = !b.lyric.trim() && !b.chords.some((c) => c.trim()) && Object.keys(b.tab).length === 0;
+    if (!empty) break;
+    end--;
+  }
+  return bars.slice(0, end);
+};
+
+// Re-chunk a flat bar sequence into fixed-size pages (MAX_BARS_PER_PAGE slots
+// each, padded with empties), re-keying each bar's tab to its new page-local
+// index. Always returns at least one page.
+const barsToPages = (bars: FlatBar[], barsPerPage: number, slots: number): PageState[] => {
+  const pages: PageState[] = [];
+  const pageCount = Math.max(1, Math.ceil(bars.length / barsPerPage));
+  for (let p = 0; p < pageCount; p++) {
+    const page = emptyPage(slots);
+    for (let i = 0; i < barsPerPage; i++) {
+      const src = bars[p * barsPerPage + i];
+      if (!src) continue;
+      page.barLyrics[i] = src.lyric;
+      page.barBeatChords[i] = [...src.chords];
+      Object.entries(src.tab).forEach(([ck, cell]) => {
+        page.barTab![`${i}:${ck}`] = cell;
+      });
+    }
+    pages.push(page);
+  }
+  return pages;
+};
+
 // Fixed paper dimensions: 1000px = 8.5", 1100px = 11" (100px per inch)
 // The editor sheet mirrors a printed US Letter page (8.5in x 11in) so what you
 // see on screen maps to what prints. Width is arbitrary px; height and margin
@@ -503,10 +567,37 @@ export const EditorScreen: React.FC = () => {
       lyricSpacing: pendingLyricSpacing,
       showStaff: pendingShowStaff,
     });
-    // Commit the chords-per-bar change (re-slices bars) only on Save.
-    if (pendingChordsPerBar !== chordsPerBar) {
-      handleChordsPerBarChange(pendingChordsPerBar);
+    // Re-slice chords-per-bar and/or reflow bars across pages when the staff
+    // toggles. Both derive from the same `allPages`, so do them together off one
+    // snapshot rather than through two handlers that would race on stale state.
+    const chordsChanged = pendingChordsPerBar !== chordsPerBar;
+    const staffChanged = pendingShowStaff !== showStaff;
+    if (chordsChanged || staffChanged) {
+      // Apply the chords-per-bar reslice first so flattened bars carry the new
+      // slot count; the total number of bars is unaffected.
+      let pages = allPages;
+      if (chordsChanged) {
+        pages = pages.map((page) => ({
+          ...page,
+          barBeatChords: page.barBeatChords.map((bar) => resliceBar(bar, chordsPerBar, pendingChordsPerBar)),
+        }));
+      }
+      // Toggling the staff changes bars-per-page (16 with, 28 without); tear the
+      // pages down to one flat bar list and rebuild them from scratch so no stale
+      // page (e.g. a now-out-of-range 4th page) can survive. 60 bars stay 60 bars.
+      if (staffChanged) {
+        const oldBarsPerPage = rowsForStaff(showStaff) * BARS_PER_ROW;
+        const newBarsPerPage = rowsForStaff(pendingShowStaff) * BARS_PER_ROW;
+        const flat = flattenPages(pages, pendingChordsPerBar, oldBarsPerPage);
+        pages = barsToPages(flat, newBarsPerPage, pendingChordsPerBar);
+      }
+      setAllPages(pages);
+      if (chordsChanged) updateGlobalSettings({ chordsPerBar: pendingChordsPerBar });
+      updateComposition({ notes: JSON.stringify({ pages }) });
     }
+    // Return to the first page on any settings save — the page grid may have
+    // been rebuilt, and this avoids rendering a stale/out-of-range page index.
+    setCurrentPage(0);
     saveToCache();
     setShowSettingsDialog(false);
     setSnackbar({ open: true, message: 'Settings saved' });
