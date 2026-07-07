@@ -28,6 +28,14 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+        env:
+          # Supabase credentials are inlined into the static bundle at build
+          # time. Both are repo *variables* (Settings → Secrets and variables →
+          # Actions → Variables) — neither is truly secret: the URL is public
+          # and the anon/publishable key is safe to expose in the bundle, since
+          # RLS is what enforces per-user isolation.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

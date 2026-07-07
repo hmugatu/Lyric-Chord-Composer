@@ -268,6 +268,8 @@ export const EditorScreen: React.FC = () => {
   const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(1);
   const [pendingLyricSpacing, setPendingLyricSpacing] = React.useState<'stretch' | 'left'>('stretch');
   const [pendingShowStaff, setPendingShowStaff] = React.useState(true);
+  const [pendingTitle, setPendingTitle] = React.useState('');
+  const [pendingArtist, setPendingArtist] = React.useState('');
 
   const [currentPage, setCurrentPage] = React.useState(0);
   const [allPages, setAllPages] = React.useState<PageState[]>([emptyPage()]);
@@ -776,11 +778,15 @@ export const EditorScreen: React.FC = () => {
     setPendingChordsPerBar(chordsPerBar);
     setPendingLyricSpacing(lyricSpacing);
     setPendingShowStaff(showStaff);
+    setPendingTitle(currentComposition?.title ?? '');
+    setPendingArtist(currentComposition?.artist ?? '');
     setShowSettingsDialog(true);
   };
 
   const handleSettingsSave = () => {
     if (!currentComposition) return;
+
+    updateComposition({ title: pendingTitle, artist: pendingArtist });
 
     // Resolve tuning: a known preset uses its canonical notes; otherwise treat
     // it as a custom tuning with the notes typed in the override field.
@@ -922,12 +928,20 @@ export const EditorScreen: React.FC = () => {
     <Box sx={{ bgcolor: 'background.default', minHeight: '100%' }}>
       {/* Header */}
       <Box sx={{ p: 2, bgcolor: 'background.paper', color: 'text.primary', borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <input
-          style={{ fontSize: 20, fontWeight: 600, color: 'currentColor', background: 'transparent', flex: 1, border: 'none', outline: 'none', padding: '4px 8px', marginRight: 16 }}
-          value={currentComposition.title}
-          onChange={(e) => updateComposition({ title: e.target.value })}
-          placeholder="Untitled Song"
-        />
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, mr: 2 }}>
+          <input
+            style={{ fontSize: 20, fontWeight: 600, color: 'currentColor', background: 'transparent', width: '100%', border: 'none', outline: 'none', padding: '4px 8px' }}
+            value={currentComposition.title}
+            onChange={(e) => { updateComposition({ title: e.target.value }); saveToCache(); }}
+            placeholder="Untitled Song"
+          />
+          <input
+            style={{ fontSize: 14, color: 'currentColor', opacity: 0.7, background: 'transparent', width: '100%', border: 'none', outline: 'none', padding: '0 8px' }}
+            value={currentComposition.artist ?? ''}
+            onChange={(e) => { updateComposition({ artist: e.target.value }); saveToCache(); }}
+            placeholder="Artist"
+          />
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Tooltip title="New composition">
             <IconButton onClick={handleCreateNew}><NoteAddIcon /></IconButton>
@@ -1073,12 +1087,15 @@ export const EditorScreen: React.FC = () => {
                   marginRight: 32,
                 }}
                 value={currentComposition.title}
-                onChange={(e) => updateComposition({ title: e.target.value })}
+                onChange={(e) => { updateComposition({ title: e.target.value }); saveToCache(); }}
                 placeholder="Untitled Song"
               />
               {/* Header reference — each piece hidden by default, shown per its
                   Settings toggle (see GlobalSettings show* flags). */}
               <Box sx={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                {currentComposition.globalSettings.showArtist && (
+                  <Typography variant="caption"><b>Artist:</b> {currentComposition.artist || 'Unknown'}</Typography>
+                )}
                 {currentComposition.globalSettings.showKey && (
                   <Typography variant="caption"><b>Key:</b> {currentComposition.globalSettings.key}</Typography>
                 )}
@@ -1332,6 +1349,28 @@ export const EditorScreen: React.FC = () => {
         <DialogTitle>Composition Settings</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1, minWidth: 320 }}>
+            <TextField
+              label="Title"
+              value={pendingTitle}
+              onChange={(e) => setPendingTitle(e.target.value)}
+              size="small"
+              placeholder="Untitled Song"
+              fullWidth
+            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                label="Artist"
+                value={pendingArtist}
+                onChange={(e) => setPendingArtist(e.target.value)}
+                size="small"
+                placeholder="Artist"
+                sx={{ flex: 1 }}
+              />
+              <SheetToggle
+                checked={currentComposition.globalSettings.showArtist ?? false}
+                onChange={(v) => updateGlobalSettings({ showArtist: v })}
+              />
+            </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <TextField select label="Key" value={key || 'C'} onChange={(e) => setKey(e.target.value)} size="small" sx={{ flex: 1 }}>
                 {KEY_OPTIONS.map((k) => (
