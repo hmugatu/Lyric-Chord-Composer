@@ -3,27 +3,8 @@
 # dependencies
 node_modules/
 
-# Expo
-.expo/
+# Vite build output
 dist/
-web-build/
-expo-env.d.ts
-
-# Web app (Vite) build output
-web/dist/
-web/node_modules/
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
 
 # debug
 npm-debug.*
@@ -39,10 +20,6 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
-
-# generated native folders
-/ios
-/android
 
 # Claude temporary files and local settings
 tmpclaude-*

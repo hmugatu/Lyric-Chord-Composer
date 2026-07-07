@@ -1,136 +1,84 @@
-# Lyric-Chord Composer
+# Lyric Chord Composer
 
-A cross-platform guitar music composition application for Android, iOS, and Web. Create, edit, and manage guitar compositions with chord diagrams, tablature, musical notation, and lyrics.
+A web app (React + Vite + MUI) for composing guitar music — chord diagrams, tablature,
+staff notation, and lyrics with chord positioning. Deployed to GitHub Pages at
+**https://hmugatu.github.io/Lyric-Chord-Composer/**.
 
-## Features
+Music logic uses tonal.js (chord → note conversion), VexFlow (staff notation), and a
+custom renderer for tablature, chord diagrams, and print HTML. Storage is local-only:
+compositions are cached in `localStorage` and exchanged as `.hmlcc` files (download /
+file-picker upload).
 
-- Guitar chord diagrams with custom chord builder
-- Interactive tablature editor
-- Standard musical notation display
-- Lyrics with chord positioning
-- Chord progression editor
-- Cross-platform support (iOS, Android, Web)
+> This project was originally an Expo/React Native app; it has been rewritten as a plain
+> Vite web app, which is what now lives at the repo root.
 
-## Technology Stack
+## Tech stack
 
-- **React Native** with **Expo** - Cross-platform mobile & web framework
-- **Expo Router** - File-based navigation
-- **TypeScript** - Type-safe development
-- **VexFlow** - Music notation and tablature rendering
-- **Tonal.js** - Music theory operations
-- **Zustand** - State management
-- **React Native Paper** - UI components
+- **React 19** + **Vite 6** — app shell and dev server/build
+- **TypeScript** — type-safe development
+- **MUI (Material UI)** — UI components
+- **VexFlow** — music notation and tablature rendering
+- **tonal.js** — music theory operations
+- **Zustand** — state management
+- **React Router (HashRouter)** — routing
 
-## Getting Started
+## Getting started
 
-### Prerequisites
-
-- Node.js 18+ and npm
-- For iOS: macOS with Xcode
-- For Android: Android Studio with Android SDK
-
-### Installation
+Prerequisites: Node.js 18+ and npm.
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
-npm start
-
-# Run on specific platforms
-npm run web       # Web browser
-npm run ios       # iOS simulator (macOS only)
-npm run android   # Android emulator
+npm run dev
 ```
 
-### Development
+Open the URL Vite prints (e.g. http://localhost:5173/Lyric-Chord-Composer/).
 
-The app will automatically reload when you make changes to the code.
+## Production build
 
-- Press `w` to open in web browser
-- Press `i` to open in iOS simulator
-- Press `a` to open in Android emulator
+```bash
+npm run build     # outputs to dist/
+npm run preview   # serves the built app under the /Lyric-Chord-Composer/ base path
+```
 
-## Project Structure
+## Project structure
 
 ```
 Lyric-Chord-Composer/
-├── app/                          # Expo Router screens
-│   ├── (tabs)/                   # Tab navigation
-│   │   ├── index.tsx            # Home/composition list
-│   │   ├── editor.tsx           # Main editor
-│   │   └── library.tsx          # Chord library
-│   └── composition/[id].tsx     # Composition detail
-├── src/
-│   ├── components/               # React components
-│   │   ├── chords/              # Chord diagram components
-│   │   ├── tablature/           # Tab editor components
-│   │   ├── notation/            # Staff notation components
-│   │   └── lyrics/              # Lyrics editor
-│   ├── models/                  # TypeScript data models
-│   │   ├── Chord.ts
-│   │   ├── Tablature.ts
-│   │   ├── Notation.ts
-│   │   ├── Lyrics.ts
-│   │   └── Composition.ts
-│   ├── store/                   # Zustand state management
-│   │   └── compositionStore.ts
-│   ├── services/                # Business logic
-│   ├── utils/                   # Helper functions
-│   └── constants/               # App constants
-└── assets/                      # Images, fonts, etc.
+├── index.html                # Vite entry HTML
+├── vite.config.ts            # Vite config (base path for GitHub Pages)
+├── public/                   # Static assets (favicon, .nojekyll)
+└── src/
+    ├── main.tsx              # App bootstrap
+    ├── App.tsx               # Root component / routing
+    ├── screens/              # HomeScreen, EditorScreen
+    ├── components/           # Chord diagrams, tablature, staff, lyrics, dialogs
+    ├── models/               # TypeScript data models (Composition, Chord, …)
+    ├── store/                # Zustand state
+    ├── services/             # Composition I/O, caching, print service
+    ├── data/                 # chords.json chord database
+    └── utils/                # Chord naming, text import, pitch detection, geometry
 ```
 
-## Build & Deploy
+## Deployment
 
-### Quick Deploy Commands
+Pushing to `main` triggers [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml),
+which builds the app and publishes `dist/` to GitHub Pages.
 
-```bash
-# Login to Expo (run this first)
-npx eas-cli login
+**One-time setup:** in the GitHub repo, go to **Settings → Pages → Build and deployment →
+Source** and select **GitHub Actions**.
 
-# Initialize EAS project
-npx eas-cli init --id a32a8c02-5697-453d-8c32-22b8106bbcd1
+## Notes
 
-# Build for Android (recommended to start)
-npx eas-cli build --platform android
-
-# Build for Android and submit to Google Play Store
-npx eas-cli build --platform android --auto-submit
-```
-
-For detailed deployment instructions, iOS builds, troubleshooting, and app store requirements, see [BUILD_DEPLOY.md](BUILD_DEPLOY.md).
-
-## Current Status
-
-**Phase 1: Foundation - COMPLETED**
-- ✅ Project initialized with Expo and TypeScript
-- ✅ Core data models created
-- ✅ Zustand store set up
-- ✅ Basic navigation configured
-- ✅ Initial UI screens created
-- ✅ Composition export/import with .hmlcc file format
-- ✅ Local caching with AsyncStorage
-- ✅ Cross-platform file handling
-
-**Next Steps (Phase 2): Chord System**
-- Implement chord diagram display with SVG
-- Create custom chord builder
-- Build chord library with common chords
-- Add chord progression editor
+- The base path is `/Lyric-Chord-Composer/` (set in `vite.config.ts`); routing uses
+  `HashRouter` so deep links survive a page refresh on Pages' static server.
 
 ## Contributing
 
-This project is under active development. Contributions are welcome!
-
-Before making changes, read the [Development Workflow](docs/DEV_WORKFLOW.md) —
-the build → verify-in-the-real-app → commit → push-to-main loop and the
-guardrails that keep the editor and print output in sync.
+Before making changes, read the [Development Workflow](docs/DEV_WORKFLOW.md).
 
 ## License
 
-MIT License
+MIT License — see [LICENSE](LICENSE).
 
 ## Repository
 

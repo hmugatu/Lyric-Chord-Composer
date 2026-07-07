@@ -1,12 +1,11 @@
 # Development Workflow
 
-The web app lives in `web/` (Vite + MUI + VexFlow). This is the loop to follow
-for every non-trivial change so the app stays working and deploys cleanly.
+The web app (Vite + MUI + VexFlow) lives at the repo root. This is the loop to
+follow for every non-trivial change so the app stays working and deploys cleanly.
 
 ## 1. Run the dev server
 
 ```bash
-cd web
 npm install   # first time only
 npm run dev
 ```
@@ -20,9 +19,9 @@ Page layout is hardcoded in **three files that must be changed together** — a
 "bars per page" / "rows" / geometry change in one without the others will
 desync the editor from print:
 
-- `web/src/screens/EditorScreen.tsx` — the editor grid + render loop
-- `web/src/utils/importText.ts` — import pagination
-- `web/src/services/printService/htmlTemplates.ts` — print layout
+- `src/screens/EditorScreen.tsx` — the editor grid + render loop
+- `src/utils/importText.ts` — import pagination
+- `src/services/printService/htmlTemplates.ts` — print layout
 
 Current rule: bars per page follows the staff toggle — **16 bars (4 rows)** when
 the staff shows, **28 bars (7 rows)** when it's hidden. Page data is always
@@ -31,7 +30,6 @@ stored at the max size so toggling the staff never drops bars.
 ## 3. Build (must stay green)
 
 ```bash
-cd web
 npm run build   # tsc -b && vite build
 ```
 
@@ -67,8 +65,7 @@ git commit -m "..."
 ```
 
 **Deploying = pushing to `main`.** GitHub Pages auto-builds and publishes on
-push to `main` (see `BUILD_DEPLOY.md` for the mobile/EAS path; the web deploy is
-the `.github/workflows/deploy.yml` Pages workflow).
+push to `main` via the `.github/workflows/deploy.yml` Pages workflow.
 
 ```bash
 git checkout main

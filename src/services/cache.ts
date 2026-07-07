@@ -1,9 +1,9 @@
 /**
- * Composition Cache Service
- * Handles local caching of compositions using AsyncStorage
+ * Composition Cache Service (web)
+ * Persists compositions in the browser via localStorage.
+ * Async signatures are preserved so callers don't need to change.
  */
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Composition } from '../models';
 
 const CACHE_KEY = '@lyric-chord-composer:compositions';
@@ -15,36 +15,28 @@ interface CacheMetadata {
 }
 
 export class CompositionCache {
-  /**
-   * Save compositions to cache
-   */
   async saveToCache(compositions: Composition[]): Promise<void> {
     try {
       const data = JSON.stringify(compositions);
-      await AsyncStorage.setItem(CACHE_KEY, data);
+      localStorage.setItem(CACHE_KEY, data);
 
-      // Update metadata
       const metadata: CacheMetadata = {
         lastUpdated: new Date().toISOString(),
         compositionCount: compositions.length,
       };
-      await AsyncStorage.setItem(CACHE_METADATA_KEY, JSON.stringify(metadata));
+      localStorage.setItem(CACHE_METADATA_KEY, JSON.stringify(metadata));
     } catch (error) {
       console.error('Failed to save to cache:', error);
       throw new Error('Failed to save compositions to local cache');
     }
   }
 
-  /**
-   * Load compositions from cache
-   */
   async loadFromCache(): Promise<Composition[]> {
     try {
-      const data = await AsyncStorage.getItem(CACHE_KEY);
+      const data = localStorage.getItem(CACHE_KEY);
       if (!data) {
         return [];
       }
-
       return JSON.parse(data) as Composition[];
     } catch (error) {
       console.error('Failed to load from cache:', error);
@@ -52,16 +44,12 @@ export class CompositionCache {
     }
   }
 
-  /**
-   * Get cache metadata
-   */
   async getCacheMetadata(): Promise<CacheMetadata | null> {
     try {
-      const data = await AsyncStorage.getItem(CACHE_METADATA_KEY);
+      const data = localStorage.getItem(CACHE_METADATA_KEY);
       if (!data) {
         return null;
       }
-
       return JSON.parse(data) as CacheMetadata;
     } catch (error) {
       console.error('Failed to get cache metadata:', error);
@@ -69,44 +57,25 @@ export class CompositionCache {
     }
   }
 
-  /**
-   * Clear all cached compositions
-   */
   async clearCache(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([CACHE_KEY, CACHE_METADATA_KEY]);
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_METADATA_KEY);
     } catch (error) {
       console.error('Failed to clear cache:', error);
       throw new Error('Failed to clear local cache');
     }
   }
 
-  /**
-   * Check if cache exists
-   */
   async hasCache(): Promise<boolean> {
-    try {
-      const data = await AsyncStorage.getItem(CACHE_KEY);
-      return data !== null;
-    } catch {
-      return false;
-    }
+    return localStorage.getItem(CACHE_KEY) !== null;
   }
 
-  /**
-   * Get cache size (approximate)
-   */
   async getCacheSize(): Promise<number> {
-    try {
-      const data = await AsyncStorage.getItem(CACHE_KEY);
-      if (!data) {
-        return 0;
-      }
-
-      // Return size in bytes
-      return new Blob([data]).size;
-    } catch {
+    const data = localStorage.getItem(CACHE_KEY);
+    if (!data) {
       return 0;
     }
+    return new Blob([data]).size;
   }
 }
