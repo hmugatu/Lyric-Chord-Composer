@@ -7,7 +7,32 @@ import { immer } from 'zustand/middleware/immer';
 import { Composition, Section, GlobalSettings } from '../models';
 import { STANDARD_TUNING } from '../models/Note';
 import { CompositionStorageService } from '../services/compositionService';
-import { CompositionCache } from '../services/cache';
+import * as compositionsRepo from '../services/compositionsRepo';
+
+// One-time migration of pre-Supabase localStorage compositions into the user's
+// cloud account. Runs at most once per browser (guarded by MIGRATED_KEY).
+const LEGACY_CACHE_KEY = '@lyric-chord-composer:compositions';
+const LEGACY_METADATA_KEY = '@lyric-chord-composer:cache-metadata';
+const MIGRATED_KEY = '@lyric-chord-composer:migrated';
+
+async function migrateLegacyLocalCompositions(): Promise<void> {
+  if (localStorage.getItem(MIGRATED_KEY)) return;
+  try {
+    const raw = localStorage.getItem(LEGACY_CACHE_KEY);
+    if (raw) {
+      const legacy = JSON.parse(raw) as Composition[];
+      if (Array.isArray(legacy) && legacy.length > 0) {
+        await compositionsRepo.bulkUpsert(legacy);
+      }
+    }
+    // Clear legacy data and mark migrated so this never runs again.
+    localStorage.removeItem(LEGACY_CACHE_KEY);
+    localStorage.removeItem(LEGACY_METADATA_KEY);
+    localStorage.setItem(MIGRATED_KEY, new Date().toISOString());
+  } catch (error) {
+    console.error('Legacy composition migration failed:', error);
+  }
+}
 
 interface CompositionState {
   // Current composition
@@ -97,7 +122,6 @@ const createNewComposition = (title: string, artist?: string): Composition => ({
 
 // Initialize services
 const storageService = new CompositionStorageService();
-const cacheService = new CompositionCache();
 
 export const useCompositionStore = create<CompositionState>()(
   immer((set, get) => ({
@@ -172,6 +196,10 @@ export const useCompositionStore = create<CompositionState>()(
         if (state.currentComposition?.id === id) {
           state.currentComposition = null;
         }
+      });
+      // Remove from the cloud (fire-and-forget; UI already updated).
+      compositionsRepo.deleteComposition(id).catch((error) => {
+        console.error('Failed to delete composition from cloud:', error);
       });
     },
 
@@ -314,8 +342,8 @@ export const useCompositionStore = create<CompositionState>()(
           state.isLoading = false;
         });
 
-        // Save to cache
-        await get().saveToCache();
+        // Persist the imported composition to the cloud.
+        await compositionsRepo.upsertComposition(composition);
       } catch (error) {
         set((state) => {
           state.isLoading = false;
@@ -333,10 +361,10 @@ export const useCompositionStore = create<CompositionState>()(
         });
 
         const results = await storageService.importCompositions();
+        const imported = results.map((r) => r.composition);
 
         set((state) => {
-          results.forEach((result) => {
-            const composition = result.composition;
+          imported.forEach((composition) => {
             const existingIndex = state.compositions.findIndex(
               (c) => c.id === composition.id
             );
@@ -351,8 +379,8 @@ export const useCompositionStore = create<CompositionState>()(
           state.isLoading = false;
         });
 
-        // Save to cache
-        await get().saveToCache();
+        // Persist all imported compositions to the cloud.
+        await compositionsRepo.bulkUpsert(imported);
       } catch (error) {
         set((state) => {
           state.isLoading = false;
@@ -362,7 +390,8 @@ export const useCompositionStore = create<CompositionState>()(
       }
     },
 
-    // Cache operations
+    // Persistence operations (Supabase-backed).
+    // The `*Cache` names are kept so existing call sites don't need to change.
     loadFromCache: async () => {
       try {
         set((state) => {
@@ -370,7 +399,7 @@ export const useCompositionStore = create<CompositionState>()(
           state.error = null;
         });
 
-        const compositions = await cacheService.loadFromCache();
+        const compositions = await compositionsRepo.listCompositions();
 
         set((state) => {
           state.compositions = compositions;
@@ -381,41 +410,38 @@ export const useCompositionStore = create<CompositionState>()(
         set((state) => {
           state.isLoading = false;
           state.error =
-            error instanceof Error ? error.message : 'Failed to load cache';
+            error instanceof Error ? error.message : 'Failed to load compositions';
         });
       }
     },
 
+    // Persist the current composition to the cloud. Called after every edit;
+    // per-composition upsert replaces the old "save the whole array" model.
     saveToCache: async () => {
+      const current = get().currentComposition;
+      if (!current) return;
       try {
-        await cacheService.saveToCache(get().compositions);
-
+        await compositionsRepo.upsertComposition(current);
         set((state) => {
           state.lastCacheUpdate = new Date();
         });
       } catch (error) {
-        console.error('Failed to save to cache:', error);
+        console.error('Failed to save composition to cloud:', error);
       }
     },
 
     clearCache: async () => {
-      try {
-        await cacheService.clearCache();
-
-        set((state) => {
-          state.lastCacheUpdate = null;
-        });
-      } catch (error) {
-        set((state) => {
-          state.error =
-            error instanceof Error ? error.message : 'Failed to clear cache';
-        });
-        throw error;
-      }
+      // Nothing to clear client-side; cloud data is authoritative. Kept for API
+      // compatibility with existing callers.
+      set((state) => {
+        state.lastCacheUpdate = null;
+      });
     },
 
     initializeStore: async () => {
-      // Load compositions from cache on app startup
+      // One-time import of any pre-Supabase localStorage compositions, then load
+      // the user's compositions from the cloud. Requires an active session.
+      await migrateLegacyLocalCompositions();
       await get().loadFromCache();
     },
   }))

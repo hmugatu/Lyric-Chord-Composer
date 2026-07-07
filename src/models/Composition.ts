@@ -55,6 +55,7 @@ export interface GlobalSettings {
   showTempo?: boolean;
   showCapo?: boolean;
   showTuning?: boolean;
+  showArtist?: boolean;
   /** Show the mini chord-diagram reference strip on each page (default true). */
   showChordDiagrams?: boolean;
 }

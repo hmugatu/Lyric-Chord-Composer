@@ -14,6 +14,7 @@
     "@emotion/styled": "^11.13.0",
     "@mui/icons-material": "^6.1.0",
     "@mui/material": "^6.1.0",
+    "@supabase/supabase-js": "^2.110.1",
     "@tonaljs/chord": "^6.1.1",
     "@tonaljs/note": "^4.12.1",
     "@tonaljs/tonal": "^4.10.0",
