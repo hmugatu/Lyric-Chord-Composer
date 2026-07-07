@@ -15,11 +15,11 @@ Automatically derives and renders musical notes on the staff and tablature based
 This feature uses:
 - **@tonaljs/tonal** to parse chord names and extract chord tones (root, 3rd, 5th, 7th)
 - **VexFlow 5.0** for professional music notation rendering (clefs, staves, proper note shapes)
-- **Chord fingering data** from `chords/chords.json` for tablature display
+- **Chord fingering data** from `src/data/chords.json` for tablature display
 
 ## Important: Tonal.js Import Pattern
 
-**CRITICAL**: In browser/bundler contexts (React Native web, Metro, webpack), always import tonal.js as a namespace:
+**CRITICAL**: In browser/bundler contexts (Vite, webpack), always import tonal.js as a namespace:
 
 ```typescript
 // CORRECT - works in browser context
@@ -39,8 +39,8 @@ The individual package imports (`@tonaljs/chord`, `@tonaljs/note`) can fail sile
 - `src/services/printService/noteRenderer.ts` - Core note rendering and tablature generation
 - Generates inline SVG for PDF/print HTML templates
 
-### Editor UI (React Native)
-- `src/components/StaffNotes.tsx` - VexFlow-based staff notation for web
+### Editor UI (React web)
+- `src/components/StaffNotes.tsx` - VexFlow-based staff notation
 - `src/components/Tablature.tsx` - Guitar tablature component
 - Renders notes and tabs in real-time as chords are selected
 
@@ -49,11 +49,11 @@ The individual package imports (`@tonaljs/chord`, `@tonaljs/note`) can fail sile
 | File | Purpose |
 |------|---------|
 | `src/services/printService/noteRenderer.ts` | Chord parsing, note positioning, SVG generation, tablature SVG |
-| `src/components/StaffNotes.tsx` | VexFlow staff notation for editor (web) |
+| `src/components/StaffNotes.tsx` | VexFlow staff notation for editor |
 | `src/components/Tablature.tsx` | Guitar tablature component for editor |
 | `src/services/printService/htmlTemplates.ts` | Integrates notes and tabs into print output |
-| `app/(tabs)/editor.tsx` | Uses StaffNotes and Tablature in measure boxes |
-| `chords/chords.json` | Chord fingering data for tablature |
+| `src/screens/EditorScreen.tsx` | Uses StaffNotes and Tablature in measure boxes |
+| `src/data/chords.json` | Chord fingering data for tablature |
 
 ## Core Functions
 
@@ -153,9 +153,9 @@ The parser strips common suffixes like "(easy)", "(barre)", "major", "minor" for
 
 ## Integration Points
 
-### In Editor (editor.tsx)
+### In Editor (`src/screens/EditorScreen.tsx`)
 
-The editor renders 4 rows of 4 measures each. Each row passes a flattened 16-beat array:
+The editor renders rows of 4 measures each. Each row passes a flattened 16-beat array:
 
 ```tsx
 // Get all 4 bars worth of chords for this row (16 beats)
@@ -165,26 +165,22 @@ const rowBeatChords = [0, 1, 2, 3].map(colIndex => {
 }).flat();
 
 // Tablature spanning all 4 bars with bar lines
-<View style={styles.tablatureBox}>
-  <Tablature
-    beatChords={rowBeatChords}
-    chordsData={chordsData}
-    width={CONTENT_WIDTH}
-    height={65}
-    numMeasures={4}
-  />
-</View>
+<Tablature
+  beatChords={rowBeatChords}
+  chordsData={chordsData}
+  width={CONTENT_WIDTH}
+  height={65}
+  numMeasures={4}
+/>
 
 // Staff with 4 measures (scaled to 75%)
-<View style={styles.measureBox}>
-  <StaffNotes
-    beatChords={rowBeatChords}
-    width={CONTENT_WIDTH}
-    height={85}
-    numMeasures={4}
-    scale={0.75}
-  />
-</View>
+<StaffNotes
+  beatChords={rowBeatChords}
+  width={CONTENT_WIDTH}
+  height={85}
+  numMeasures={4}
+  scale={0.75}
+/>
 ```
 
 ### In Print (htmlTemplates.ts)
@@ -202,8 +198,8 @@ rowHtml += `
 ## Dependencies
 
 - `@tonaljs/tonal` - Main tonal.js bundle (use this, not individual packages)
-- `vexflow` - Music notation rendering (dynamic import on web only)
-- `react-native-svg` - SVG rendering in React Native
+- `vexflow` - Music notation rendering (can be dynamically imported to keep it out of the initial bundle)
+- Inline SVG (DOM `<svg>`) for print/tablature rendering
 
 ## Common Tasks
 
@@ -227,15 +223,13 @@ return chord.notes.slice(0, 4).map(...); // Change 3 to 4
 
 ## VexFlow Patterns
 
-### Dynamic Import (Web Only)
-VexFlow only works on web platform. Use dynamic import to avoid bundling issues on native:
+### Dynamic Import
+Import VexFlow dynamically to keep it out of the initial bundle (it's large):
 
 ```typescript
-if (Platform.OS === 'web') {
-  const VexFlow = await import('vexflow');
-  const vf = VexFlow.default || VexFlow;
-  const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, GhostNote } = vf;
-}
+const VexFlow = await import('vexflow');
+const vf = VexFlow.default || VexFlow;
+const { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, GhostNote } = vf;
 ```
 
 ### Empty Beats - Use GhostNote
@@ -349,17 +343,15 @@ const displayFingering = [...chord.fingering].reverse();
 
 ### Integration Points
 
-#### In Editor (editor.tsx)
+#### In Editor (`src/screens/EditorScreen.tsx`)
 ```tsx
-<View style={styles.measureBox}>
-  <StaffNotes beatChords={...} width={...} height={70} />
-  <Tablature
-    beatChords={barBeatChords[barIndex]}
-    chordsData={chordsData}
-    width={measureWidth - 32}
-    height={50}
-  />
-</View>
+<StaffNotes beatChords={...} width={...} height={70} />
+<Tablature
+  beatChords={barBeatChords[barIndex]}
+  chordsData={chordsData}
+  width={measureWidth - 32}
+  height={50}
+/>
 ```
 
 #### In Print (htmlTemplates.ts)

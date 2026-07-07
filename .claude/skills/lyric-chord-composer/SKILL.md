@@ -1,7 +1,7 @@
 ---
 name: lyric-chord-composer
 description: |
-  Context about the Lyric-Chord-Composer React Native/Expo app for guitar
+  Context about the Lyric-Chord-Composer Vite/React web app for guitar
   music composition. Use when working on components, models, services,
   or understanding the codebase structure. Covers chord diagrams, lyrics,
   tablature, and music notation features.
@@ -11,7 +11,7 @@ description: |
 
 ## Application Purpose
 
-**Lyric-Chord-Composer** is a cross-platform guitar music composition application for creating, editing, and managing guitar compositions with integrated views of:
+**Lyric-Chord-Composer** is a web guitar music composition application for creating, editing, and managing guitar compositions with integrated views of:
 - Lyrics with chord positioning
 - Visual chord diagrams
 - Guitar tablature
@@ -27,69 +27,62 @@ description: |
 
 | Category | Technology |
 |----------|------------|
-| Framework | React Native 0.81 + Expo 54 |
+| Framework | React 19 + Vite 6 |
 | Language | TypeScript 5.9 |
-| Routing | Expo Router 6.0 (file-based navigation) |
+| Routing | React Router 7 (HashRouter) |
 | State Management | Zustand 5.0 with Immer middleware |
-| UI Components | React Native Paper 5.14 |
-| Music Theory | @tonaljs (chord, note, scale, tonal) |
+| UI Components | MUI (Material UI) 6 |
+| Music Theory | @tonaljs (chord, note, tonal) |
 | Music Notation | VexFlow 5.0 |
-| Graphics | React Native SVG, @shopify/react-native-skia |
-| Storage | AsyncStorage, Expo File System |
-| Cloud | Google Drive API, OneDrive API |
+| Graphics | Inline SVG |
+| Storage | localStorage + `.hmlcc` file download/upload (local only) |
 
 ## Project Structure
 
 ```
-Lyric-Chord-Composer/
-├── app/                              # Expo Router screens
-│   ├── _layout.tsx                   # Root navigation (Stack)
-│   ├── (tabs)/                       # Tab-based navigation
-│   │   ├── _layout.tsx               # Tab setup
-│   │   ├── index.tsx                 # Home - compositions list
-│   │   └── editor.tsx                # Main composition editor
-│   └── composition/[id].tsx          # Composition detail
-│
-├── src/
-│   ├── models/                       # TypeScript data models
-│   │   ├── Composition.ts            # Main composition model
-│   │   ├── Chord.ts                  # Chord definitions
-│   │   ├── Tablature.ts              # Tab notation
-│   │   ├── Notation.ts               # Staff notation
-│   │   ├── Lyrics.ts                 # Lyrics with chord positions
-│   │   ├── Note.ts                   # Notes, tunings, time signatures
-│   │   └── index.ts                  # Barrel export
-│   │
-│   ├── store/
-│   │   └── compositionStore.ts       # Zustand global state
-│   │
-│   ├── services/
-│   │   ├── compositionService.ts     # Save/load/export compositions
-│   │   ├── compositionSyncManager.ts # Cloud sync logic
-│   │   ├── compositionTemplates.ts   # Default templates
-│   │   ├── cache.ts                  # AsyncStorage caching
-│   │   ├── cloudAuthManager.ts       # OAuth management
-│   │   ├── fileStorage/
-│   │   │   ├── LocalFileProvider.ts  # Device file system
-│   │   │   ├── GoogleDriveProvider.ts
-│   │   │   ├── OneDriveProvider.ts
-│   │   │   └── types.ts              # StorageProvider interface
-│   │   └── printService/
-│   │       ├── index.ts              # Print/PDF service
-│   │       ├── chordSvgGenerator.ts  # SVG chord diagrams
-│   │       └── htmlTemplates.ts      # Print templates
-│   │
-│   ├── components/                   # React components
-│   │   └── PrintDialog.tsx           # Print options modal
-│   │
-│   └── hooks/                        # Custom React hooks
-│       ├── useCompositionSync.ts     # Cloud sync hook
-│       └── useCloudAuth.ts           # OAuth hook
-│
-├── chords/
-│   └── chords.json                   # Chord database (200+ chords)
-│
-└── assets/                           # App icons, splash screen
+Lyric-Chord-Composer/            # repo root = the Vite app
+├── index.html                   # Vite entry HTML
+├── vite.config.ts               # Vite config (GitHub Pages base path)
+├── public/                      # Static assets (favicon, .nojekyll)
+└── src/
+    ├── main.tsx                 # App bootstrap
+    ├── App.tsx                  # Root component + React Router routes
+    ├── theme.tsx                # MUI theme / color mode
+    │
+    ├── screens/
+    │   ├── HomeScreen.tsx        # Compositions list, create/import
+    │   └── EditorScreen.tsx      # Main composition editor
+    │
+    ├── models/                  # TypeScript data models
+    │   ├── Composition.ts        # Main composition model
+    │   ├── Chord.ts              # Chord definitions
+    │   ├── Tablature.ts          # Tab notation
+    │   ├── Notation.ts           # Staff notation
+    │   ├── Lyrics.ts             # Lyrics with chord positions
+    │   ├── Note.ts               # Notes, tunings, time signatures
+    │   └── index.ts              # Barrel export
+    │
+    ├── store/
+    │   └── compositionStore.ts   # Zustand global state
+    │
+    ├── services/
+    │   ├── compositionService.ts # Save/load/export compositions
+    │   ├── compositionTemplates.ts # Default templates
+    │   ├── cache.ts             # localStorage caching
+    │   ├── audioStore.ts        # Recorded audio clip storage
+    │   ├── fileStorage/
+    │   │   ├── LocalFileProvider.ts # Browser download / file-picker
+    │   │   └── types.ts         # StorageProvider interface
+    │   └── printService/
+    │       ├── index.ts          # Browser print service
+    │       ├── chordSvgGenerator.ts # SVG chord diagrams
+    │       ├── noteRenderer.ts   # Staff/tab SVG
+    │       └── htmlTemplates.ts  # Print templates
+    │
+    ├── components/              # React components (dialogs, diagrams, staff, tab)
+    ├── data/
+    │   └── chords.json          # Chord database (200+ chords)
+    └── utils/                   # Chord naming, text import, pitch detect, geometry
 ```
 
 ## Core Data Models
@@ -111,7 +104,7 @@ Each section contains:
 - `lyrics`: Lyrics with chord positions
 - `chordProgression`: Array of chord references
 
-### Chord (`chords/chords.json`)
+### Chord (`src/data/chords.json`)
 Database of 200+ chords with:
 - `key`: Root note (C, D, E, etc.)
 - `suffix`: Quality (major, minor, 7, m7, sus2, sus4, add9, etc.)
@@ -173,14 +166,11 @@ const addSection = useCompositionStore(state => state.addSection);
 
 ### fileStorage Providers
 Provider pattern with `StorageProvider` interface:
-- `LocalFileProvider`: Device file system via expo-file-system
-- `GoogleDriveProvider`: Google Drive API with OAuth
-- `OneDriveProvider`: Microsoft Graph API
+- `LocalFileProvider`: Browser download + file-picker upload of `.hmlcc` files (local only; no cloud sync)
 
 ### printService
-- `print(composition, chordsData, options)`: Native print dialog
-- `exportPdf(composition, chordsData, options)`: PDF generation
-- Platform-specific handling (web iframe, mobile expo-print)
+- `print(composition, chordsData, options)`: Opens the browser print dialog (save-as-PDF available there)
+- Uses `window.open` + `window.print()` with generated HTML
 
 ## File Format (.hmlcc)
 
@@ -208,18 +198,16 @@ JSON-based format for portable composition files:
 
 1. **Provider Pattern**: Storage backends implement `StorageProvider` interface
 2. **Service Layer**: Business logic separated from UI components
-3. **File-based Routing**: Expo Router with `app/` directory structure
+3. **Routing**: React Router (`HashRouter`) declared in `src/App.tsx`
 4. **Immutable State**: Zustand + Immer for safe state updates
 5. **Component Hooks**: Access store via `useCompositionStore` selector pattern
 
 ## Navigation Flow
 
 ```
-Root (_layout.tsx)
-├── (tabs)
-│   ├── index.tsx → Compositions list, create/import
-│   └── editor.tsx → Edit current composition
-└── composition/[id].tsx → View composition details
+App.tsx (HashRouter)
+├── /        → HomeScreen  (compositions list, create/import)
+└── /editor  → EditorScreen (edit current composition)
 ```
 
 ## Editor Layout & Measure Alignment
@@ -230,7 +218,7 @@ The editor displays a paper-sized canvas (1000x1100px) with 4 rows of 4 measures
 2. **Tablature** - 6-string tab with fret numbers
 3. **Staff Notation** - VexFlow-rendered musical staff
 
-### Layout Constants (`app/(tabs)/editor.tsx`)
+### Layout Constants (`src/screens/EditorScreen.tsx`)
 
 ```typescript
 const PAPER_WIDTH = 1000;
@@ -262,7 +250,7 @@ To align all elements, chord boxes and tablature must use the **same width calcu
 
 ### Component Files
 
-- **Chord boxes**: `app/(tabs)/editor.tsx` (barRow with marginLeft: 10, variable barWidth)
+- **Chord boxes**: `src/screens/EditorScreen.tsx` (barRow with marginLeft: 10, variable barWidth)
 - **Tablature**: `src/components/Tablature.tsx` (uses same width calc, renders bar lines)
 - **Staff**: `src/components/StaffNotes.tsx` (VexFlow with clef/time signature)
 
@@ -317,21 +305,21 @@ interface StaffNotesProps {
 Chord boxes use calculated widths based on measure widths (not hardcoded):
 
 ```typescript
-// In editor.tsx - each beat's width is derived from bar width
+// In EditorScreen.tsx - each beat's width is derived from bar width
 const beatWidth = barWidth / 4;
 
-// Applied to TouchableOpacity
-style={[styles.beatChordBox, { width: beatWidth }]}
+// Applied to the beat chord box element
+style={{ width: beatWidth }}
 ```
 
-The `beatChordBox` style has no borders - just height, background, and centering.
+The beat chord box has no borders - just height, background, and centering.
 
 ## Common Development Tasks
 
 ### Adding a new section type
 1. Update `SectionType` enum in `src/models/Composition.ts`
 2. Add handling in `compositionStore.ts` actions
-3. Update UI in `editor.tsx`
+3. Update UI in `src/screens/EditorScreen.tsx`
 
 ### Adding a new storage provider
 1. Create provider in `src/services/fileStorage/`
@@ -339,7 +327,7 @@ The `beatChordBox` style has no borders - just height, background, and centering
 3. Register in `compositionService.ts`
 
 ### Modifying chord display
-1. Chord data from `chords/chords.json`
+1. Chord data from `src/data/chords.json`
 2. SVG generation in `printService/chordSvgGenerator.ts`
 3. UI rendering in editor components
 
@@ -356,8 +344,8 @@ The `beatChordBox` style has no borders - just height, background, and centering
 | Main data model | `src/models/Composition.ts` |
 | Global state | `src/store/compositionStore.ts` |
 | File I/O | `src/services/compositionService.ts` |
-| Editor UI | `app/(tabs)/editor.tsx` |
-| Chord database | `chords/chords.json` |
+| Editor UI | `src/screens/EditorScreen.tsx` |
+| Chord database | `src/data/chords.json` |
 | Print service | `src/services/printService/index.ts` |
 | Note rendering | `src/services/printService/noteRenderer.ts` |
 | Staff notes component | `src/components/StaffNotes.tsx` |

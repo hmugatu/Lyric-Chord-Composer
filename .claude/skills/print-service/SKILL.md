@@ -1,21 +1,20 @@
 ---
 name: print-service
 description: |
-  Implements cross-platform print and PDF export for React Native/Expo compositions.
+  Implements browser print and PDF export for the Vite web composer.
   Supports chord diagrams, staff notation, and guitar tablature in print output.
   Use when printing music compositions, generating PDFs, or working with
-  expo-print, VexFlow-rendered notation, and document rendering.
+  the browser print flow, VexFlow-rendered notation, and document rendering.
 ---
 
 # Print Document & Composition Skill
 
-Add professional print functionality to music composition applications with PDF export and cross-platform printing support.
+Add professional print functionality to the web music composition app with browser-native print and print-to-PDF support.
 
 ## Overview
 
-This skill implements cross-platform print functionality for React Native/Expo music composition applications, supporting:
-- Direct print dialog (system native)
-- Web, iOS, and Android platforms
+This skill implements print functionality for the Vite/React web music composition app, supporting:
+- Direct browser print dialog (`window.open` + `window.print()`), with print-to-PDF available there
 - **Customizable print options**:
   - Chord diagrams inline with bars
   - Staff notation (musical notes on treble clef)
@@ -30,10 +29,9 @@ This skill implements cross-platform print functionality for React Native/Expo m
 ## Files Architecture
 
 ### 1. Print Service (`src/services/printService/index.ts`)
-Main service class implementing `PrintService`:
-- `print(composition, chordsData, options)` - Opens native print dialog
-- `exportPdf(composition, chordsData, options)` - Generates PDF and shares
-- Platform-specific handling (web uses iframe, mobile uses expo-print)
+Main service class `PrintService`:
+- `print(composition, chordsData, options)` - Builds HTML and opens the browser print dialog
+- Opens a new window (`window.open`) with the print HTML and calls `window.print()`; save-as-PDF is available from that dialog
 - Handles both single-page and multi-page compositions
 
 **PrintOptions interface:**
@@ -84,32 +82,24 @@ Generates print-ready HTML with row-spanning architecture:
   - Height: typically 55px for row-spanning
 - Handles empty bars gracefully (shows structure without content)
 
-### 4. Print Dialog Component (`src/components/PrintDialog.tsx`)
-Clean modal dialog for print options with:
-- **Content toggles**:
-  - ✅ Chord Diagrams checkbox (inline with bars)
-  - ✅ Tablature checkbox (6-string notation)
-  - ✅ Staff Notation checkbox (5-line staff)
-- **Page size options**: Letter (8.5" x 11") / A4 (210mm x 297mm)
-- **Orientation options**: Portrait / Landscape
-- **Action buttons**: Cancel (dialog close), Print (system print dialog)
-- Removed Export PDF option (redundant with browser print-to-PDF)
-- Clean UI with emoji indicators and descriptions
+### 4. Print options UI (`src/screens/EditorScreen.tsx`)
+Print options (chord diagrams / tablature / staff toggles, page size, orientation) live in the
+editor screen, which constructs a `PrintOptions` object and calls `printService.print(...)`.
+`chordsData` is loaded from `src/data/chords.json`.
 
 ## Dependencies
 
-```bash
-npx expo install expo-print
-```
+- `vexflow` - staff notation rendering
+- `@tonaljs/tonal` - chord → note conversion
+- No native print module — printing uses the browser (`window.open` + `window.print()`)
 
 ## Integration
 
-Add to editor screen:
-1. Import PrintService and PrintDialog
-2. Add state: `showPrintDialog`, `isPrinting`
-3. Add printer icon button in header
-4. Add handlers: `handlePrint()`, `handleExportPdf()`
-5. Add PrintDialog to Portal
+In the editor screen (`src/screens/EditorScreen.tsx`):
+1. Import `PrintService` from `../services/printService` and `chordsData` from `../data/chords.json`
+2. Create the service: `const printService = React.useMemo(() => new PrintService(), [])`
+3. Add a print button that opens the options UI
+4. Build a `PrintOptions` object and call `await printService.print(composition, chordsData, options)`
 
 ## Key Implementation Details
 
@@ -238,34 +228,20 @@ Each option toggle automatically adjusts:
 
 ## Print Handler Architecture
 
-Simplified to single print method:
+Single browser print path (in `PrintService.print`):
 ```typescript
-const handlePrint = async () => {
-  setIsPrinting(true);
-  try {
-    const html = generatePrintHtml(composition, chordsData, options);
-    if (Platform.OS === 'web') {
-      // Web: Create iframe and use window.print()
-      const iframe = document.createElement('iframe');
-      iframe.srcDoc = html;
-      document.body.appendChild(iframe);
-      iframe.contentWindow.print();
-    } else {
-      // Mobile: Use expo-print
-      await Print.printAsync({ html });
-    }
-  } finally {
-    setIsPrinting(false);
-    setShowPrintDialog(false);
-  }
-};
+const html = await generatePrintHtml(composition, chordsData, options);
+const printWindow = window.open('', '', 'width=800,height=600');
+if (!printWindow) {
+  throw new Error('Failed to open print window. Please allow pop-ups for this site.');
+}
+printWindow.document.open();
+printWindow.document.write(html);
+printWindow.document.close();
+printWindow.print();
 ```
 
-| Platform | Method | PDF Export |
-|----------|--------|------------|
-| Web | iframe + window.print() | Browser "Print to PDF" or system dialog |
-| iOS | expo-print.printAsync() | System print dialog with PDF option |
-| Android | expo-print.printAsync() | System print dialog with PDF option |
+PDF export is handled by the browser's "Save as PDF" destination in the print dialog — there is no separate export code path.
 
 ## Composition Data Structure
 
@@ -306,15 +282,8 @@ interface PageData {
 ## Common Tasks
 
 ### Add Print Button to Header
-```tsx
-<IconButton
-  icon="printer"
-  size={24}
-  onPress={() => setShowPrintDialog(true)}
-  disabled={isPrinting}
-  iconColor="#333"
-/>
-```
+Add a print button in the editor header (MUI `IconButton` / `PrintIcon`) whose click opens the
+print options UI, then calls `printService.print(...)`.
 
 ### Handle Print Options
 ```typescript
@@ -378,9 +347,9 @@ Edit CSS in `generatePrintStyles()` in `htmlTemplates.ts`:
 ## Reference Implementation
 
 See these files in this project:
-- `src/services/printService/index.ts` - Main print service
+- `src/services/printService/index.ts` - Main print service (browser print)
 - `src/services/printService/htmlTemplates.ts` - HTML/CSS generation
 - `src/services/printService/chordSvgGenerator.ts` - Chord diagram SVG
 - `src/services/printService/noteRenderer.ts` - Staff notation and tab SVG
-- `src/components/PrintDialog.tsx` - Print options UI
-- `app/(tabs)/editor.tsx` - Integration example
+- `src/screens/EditorScreen.tsx` - Print options UI + integration example
+- `src/data/chords.json` - Chord fingering data
