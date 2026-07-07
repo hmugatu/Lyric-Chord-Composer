@@ -36,6 +36,9 @@ jobs:
           # RLS is what enforces per-user isolation.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # Pin the auth magic-link redirect to the public site so links always
+          # return to the deployed app (must match a Supabase Redirect URL).
+          VITE_SITE_URL: https://hmugatu.github.io/Lyric-Chord-Composer/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

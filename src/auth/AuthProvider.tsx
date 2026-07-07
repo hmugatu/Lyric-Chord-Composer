@@ -21,9 +21,14 @@ interface AuthContextValue {
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined);
 
 // Where the magic link returns the user. Must be added to the Supabase Auth
-// "Redirect URLs" allowlist (and Site URL). BASE_URL carries the GitHub Pages
-// subpath (e.g. /Lyric-Chord-Composer/); HashRouter picks up the route after.
-const emailRedirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
+// "Redirect URLs" allowlist (and Site URL). In production we pin this to the
+// public site via VITE_SITE_URL (set in the deploy workflow) so links always
+// come back to the deployed app, not whatever origin the user signed in from.
+// Falls back to the current origin + BASE_URL for local dev, where
+// VITE_SITE_URL is unset. BASE_URL carries the GitHub Pages subpath
+// (e.g. /Lyric-Chord-Composer/); HashRouter picks up the route after.
+const emailRedirectTo =
+  import.meta.env.VITE_SITE_URL || `${window.location.origin}${import.meta.env.BASE_URL}`;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = React.useState<Session | null>(null);
