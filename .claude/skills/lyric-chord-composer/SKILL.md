@@ -69,7 +69,7 @@ Lyric-Chord-Composer/            # repo root = the Vite app
     │   ├── compositionService.ts # Save/load/export compositions
     │   ├── compositionTemplates.ts # Default templates
     │   ├── cache.ts             # localStorage caching
-    │   ├── audioStore.ts        # Recorded audio clip storage
+    │   ├── tunerTone.ts         # Reference-tone playback for the tuner
     │   ├── fileStorage/
     │   │   ├── LocalFileProvider.ts # Browser download / file-picker
     │   │   └── types.ts         # StorageProvider interface

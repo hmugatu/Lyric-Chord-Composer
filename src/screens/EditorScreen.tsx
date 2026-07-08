@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, IconButton, Tooltip, Typography, TextField, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions, InputAdornment, Snackbar,
-  ToggleButton, ToggleButtonGroup, MenuItem, Popover, Switch, Slider,
+  ToggleButton, ToggleButtonGroup, MenuItem, Popover, Switch,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -11,32 +11,20 @@ import SaveIcon from '@mui/icons-material/Save';
 import SearchIcon from '@mui/icons-material/Search';
 import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import PostAddIcon from '@mui/icons-material/PostAdd';
-import DocumentScannerIcon from '@mui/icons-material/DocumentScanner';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
-import MicIcon from '@mui/icons-material/Mic';
-import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import DeleteIcon from '@mui/icons-material/Delete';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import { useCompositionStore } from '../store/compositionStore';
-import { ALTERNATE_TUNINGS, STANDARD_TUNING } from '../models/Note';
+import { ALTERNATE_TUNINGS } from '../models/Note';
 import type { NoteDuration } from '../models/Note';
 import type { TabCell, TabTechnique } from '../models/Tablature';
 import { CompositionStorageService } from '../services/compositionService';
 import { PrintService } from '../services/printService';
 import { ImportTextDialog } from '../components/ImportTextDialog';
-import { ScanPhotoDialog } from '../components/ScanPhotoDialog';
 import { RehearsalView } from '../components/RehearsalView';
 import { CustomChordDialog } from '../components/CustomChordDialog';
 import { LyricLine } from '../components/LyricLine';
 import { textToPages } from '../utils/importText';
-import { noteToTabPosition } from '../utils/pitchDetect';
-import { RecordNoteDialog } from '../components/RecordNoteDialog';
-import { RecordClipDialog } from '../components/RecordClipDialog';
-import {
-  saveAudioClip, deleteAudioClip, resolveAudioUrl, isObjectUrl,
-  type AudioClipRef,
-} from '../services/audioStore';
+import { TunerDialog } from '../components/TunerDialog';
 import { StaffNotes } from '../components/StaffNotes';
 import { Tablature } from '../components/Tablature';
 import { ChordDiagram, MiniChordDiagram, ChordData } from '../components/ChordDiagram';
@@ -53,10 +41,6 @@ interface PageState {
 // A page is a grid of rows x 4 bars. Rows shown depend on the staff toggle:
 // with the staff there's room for 4 rows (16 bars); without it, 7 rows (28 bars).
 // Page data is always allocated at the larger size so toggling never drops bars.
-// Capture features (OCR photo scan, mic note-capture, audio record + karaoke
-// playback) are hidden for now pending a revisit. Flip to true to re-enable;
-// all the wiring stays in place. See ocr-audio-features work.
-const CAPTURE_FEATURES = false;
 
 const BARS_PER_ROW = 4;
 const ROWS_WITH_STAFF = 4;
@@ -234,19 +218,8 @@ export const EditorScreen: React.FC = () => {
   const [showCustomChordDialog, setShowCustomChordDialog] = React.useState(false);
   const [showNewDialog, setShowNewDialog] = React.useState(false);
   const [showImportDialog, setShowImportDialog] = React.useState(false);
-  const [showScanDialog, setShowScanDialog] = React.useState(false);
   const [rehearsalMode, setRehearsalMode] = React.useState(false);
-  const [showRecordDialog, setShowRecordDialog] = React.useState(false);
-  const [showClipDialog, setShowClipDialog] = React.useState(false);
-  // Reference to the composition's audio clip (local IndexedDB or a URL), plus
-  // a resolved object URL for the <audio> element. null when there's no clip.
-  const [audioRef, setAudioRef] = React.useState<AudioClipRef | null>(null);
-  const [audioUrl, setAudioUrl] = React.useState<string | null>(null);
-  // Follow-along transport state.
-  const [playhead, setPlayhead] = React.useState(0); // seconds
-  const [isPlaying, setIsPlaying] = React.useState(false);
-  const audioElRef = React.useRef<HTMLAudioElement | null>(null);
-  const activeRowRef = React.useRef<HTMLDivElement | null>(null);
+  const [showTunerDialog, setShowTunerDialog] = React.useState(false);
   const [showImportConfirm, setShowImportConfirm] = React.useState(false);
   const [pendingImport, setPendingImport] = React.useState<{
     text: string; barsPerLine: number; chordsPerBar: number;
@@ -299,17 +272,10 @@ export const EditorScreen: React.FC = () => {
   const barBeatChords = allPages[currentPage]?.barBeatChords || Array(MAX_BARS_PER_PAGE).fill(null).map(() => Array(chordsPerBar).fill(''));
   const barTab = allPages[currentPage]?.barTab || {};
 
-  // Latest audio ref, mirrored so every notes-write picks it up without stale
-  // closures (many call sites persist pages independently of audio changes).
-  const audioRefRef = React.useRef<AudioClipRef | null>(null);
-  React.useEffect(() => { audioRefRef.current = audioRef; }, [audioRef]);
-
-  // Serialize the notes blob: pages, the audio clip reference, and any
-  // per-composition custom chords.
+  // Serialize the notes blob: pages and any per-composition custom chords.
   const notesJson = (pages: PageState[]) =>
     JSON.stringify({
       pages,
-      audio: audioRefRef.current ?? undefined,
       customChords: customChordsRef.current.length ? customChordsRef.current : undefined,
     });
 
@@ -352,7 +318,6 @@ export const EditorScreen: React.FC = () => {
 
   const handleImportRequest = (text: string, barsPerLine: number, importChordsPerBar: number) => {
     setShowImportDialog(false);
-    setShowScanDialog(false);
     if (hasContent(allPages)) {
       setPendingImport({ text, barsPerLine, chordsPerBar: importChordsPerBar });
       setShowImportConfirm(true);
@@ -475,15 +440,10 @@ export const EditorScreen: React.FC = () => {
     setTuningName(currentComposition.globalSettings.tuning.name);
     setTuningNotes((currentComposition.globalSettings.tuning.notes || []).join(' '));
 
-    // Reset transport whenever the active composition changes.
-    setIsPlaying(false);
-    setPlayhead(0);
-    let parsedAudio: AudioClipRef | null = null;
     let parsedCustomChords: ChordData[] = [];
     if (currentComposition.notes) {
       try {
         const barData = JSON.parse(currentComposition.notes);
-        if (barData.audio) parsedAudio = barData.audio as AudioClipRef;
         if (Array.isArray(barData.customChords)) parsedCustomChords = barData.customChords as ChordData[];
         if (barData.pages && Array.isArray(barData.pages)) {
           setAllPages(barData.pages);
@@ -504,29 +464,10 @@ export const EditorScreen: React.FC = () => {
       setAllPages([emptyPage(chordsPerBar)]);
       setCurrentPage(0);
     }
-    setAudioRef(parsedAudio);
-    audioRefRef.current = parsedAudio;
     setCustomChords(parsedCustomChords);
     customChordsRef.current = parsedCustomChords;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentComposition?.id]);
-
-  // Resolve the audio ref (local IndexedDB clip or a URL) into a playable URL
-  // for the <audio> element, revoking any prior object URL. A local clip may
-  // exist in IndexedDB even without a stored ref (recorded this session), so we
-  // probe on every composition/ref change.
-  React.useEffect(() => {
-    let cancelled = false;
-    let created: string | null = null;
-    const compId = currentComposition?.id;
-    if (!compId) { setAudioUrl(null); return; }
-    resolveAudioUrl(compId, audioRef ?? undefined).then((url) => {
-      if (cancelled) { if (url && isObjectUrl(url)) URL.revokeObjectURL(url); return; }
-      created = url && isObjectUrl(url) ? url : null;
-      setAudioUrl(url);
-    });
-    return () => { cancelled = true; if (created) URL.revokeObjectURL(created); };
-  }, [currentComposition?.id, audioRef]);
 
   const handleLyricsChange = (barIndex: number, text: string) => {
     const newLyrics = [...barLyrics];
@@ -584,127 +525,6 @@ export const EditorScreen: React.FC = () => {
     newPages[currentPage] = { ...newPages[currentPage], barBeatChords: newChords, barTab: newTab };
     setAllPages(newPages);
     persistPages(newPages);
-  };
-
-  // First bar on the visible page with no chords and no tab notes, or -1.
-  const firstEmptyBar = (): number => {
-    const chords = allPages[currentPage]?.barBeatChords || [];
-    const tab = allPages[currentPage]?.barTab || {};
-    for (let b = 0; b < visibleBars; b++) {
-      const hasChord = (chords[b] || []).some((c) => c && c.trim());
-      const hasTab = Object.keys(tab).some((k) => k.startsWith(`${b}:`));
-      if (!hasChord && !hasTab) return b;
-    }
-    return -1;
-  };
-
-  // Resolve where a mic-detected note should land. Prefer an open tab-cell
-  // popover (exact bar/cell), then the selected chord slot (converting its beat
-  // index to a 16th-cell like stampChordToTab does); if nothing is selected,
-  // fall back to the first empty bar so recording always has a home.
-  const noteTarget = (): { bar: number; cell: number } | null => {
-    if (tabPopover) return { bar: tabPopover.bar, cell: tabPopover.cell };
-    if (selectedBarIndex !== null && selectedBeatIndex !== null) {
-      return { bar: selectedBarIndex, cell: Math.round((selectedBeatIndex / chordsPerBar) * cellsPerBar) };
-    }
-    const empty = firstEmptyBar();
-    return empty >= 0 ? { bar: empty, cell: 0 } : null;
-  };
-
-  // Live recording cursor: where the NEXT detected note lands. Seeded from
-  // noteTarget() when recording starts, then advanced one chord-slot per note.
-  const recordCursorRef = React.useRef<{ bar: number; cell: number } | null>(null);
-
-  const beginNoteRecording = () => {
-    recordCursorRef.current = noteTarget();
-  };
-
-  // Advance the cursor by one chord slot, wrapping into the next bar and
-  // stopping at the end of the visible page.
-  const advanceCursor = (cur: { bar: number; cell: number }): { bar: number; cell: number } | null => {
-    const step = Math.max(1, Math.round(cellsPerBar / chordsPerBar));
-    let cell = cur.cell + step;
-    let bar = cur.bar;
-    if (cell >= cellsPerBar) { cell = 0; bar += 1; }
-    return bar < visibleBars ? { bar, cell } : null;
-  };
-
-  // Stamp one mic-detected note at the live cursor, then advance it. Called
-  // repeatedly as the player plays; each distinct note fills the next slot.
-  const placeNextNote = (noteName: string) => {
-    const target = recordCursorRef.current ?? noteTarget();
-    if (!target) return;
-    const tuningNotesArr =
-      currentComposition?.globalSettings.tuning.notes?.length
-        ? currentComposition.globalSettings.tuning.notes
-        : STANDARD_TUNING.notes;
-    const pos = noteToTabPosition(noteName, tuningNotesArr);
-    if (!pos) {
-      setSnackbar({ open: true, message: `${noteName} is out of range — skipped` });
-      return;
-    }
-    setAllPages((pages) => {
-      const newTab = { ...(pages[currentPage]?.barTab || {}) };
-      newTab[`${target.bar}:${target.cell}:${pos.stringIndex}`] = { fret: pos.fret, duration: 'quarter' };
-      const newPages = [...pages];
-      newPages[currentPage] = { ...newPages[currentPage], barTab: newTab };
-      persistPages(newPages);
-      return newPages;
-    });
-    recordCursorRef.current = advanceCursor(target);
-  };
-
-  // Persist a freshly recorded clip locally and reference it from the notes.
-  const handleClipSaved = async (blob: Blob, durationSec: number) => {
-    setShowClipDialog(false);
-    if (!currentComposition) return;
-    await saveAudioClip(currentComposition.id, blob);
-    const ref: AudioClipRef = { location: { kind: 'local' }, mimeType: blob.type, durationSec };
-    setAudioRef(ref);
-    audioRefRef.current = ref;
-    persistPages(allPages); // writes the audio ref into notes via notesJson
-    setSnackbar({ open: true, message: 'Recording saved' });
-  };
-
-  // Attach a user-provided audio URL as the clip (no download; played directly).
-  const attachAudioUrl = (url: string) => {
-    const ref: AudioClipRef = { location: { kind: 'url', url } };
-    setAudioRef(ref);
-    audioRefRef.current = ref;
-    persistPages(allPages);
-  };
-
-  const removeAudio = async () => {
-    setIsPlaying(false);
-    setPlayhead(0);
-    if (currentComposition) await deleteAudioClip(currentComposition.id);
-    setAudioRef(null);
-    audioRefRef.current = null;
-    persistPages(allPages);
-    setSnackbar({ open: true, message: 'Recording removed' });
-  };
-
-  // Follow-along: seconds per bar from tempo + time signature. A bar has
-  // `tsBeats` beats; each beat is 60/tempo seconds (beat = the beatValue note).
-  const tempoBpm = currentComposition?.globalSettings.tempo || 120;
-  const secondsPerBar = (60 / tempoBpm) * tsBeats;
-  // Active global bar index and 0..1 progress within it at the current playhead.
-  const activeBar = isPlaying || playhead > 0 ? Math.floor(playhead / secondsPerBar) : -1;
-  const barProgress = activeBar >= 0 ? (playhead - activeBar * secondsPerBar) / secondsPerBar : 0;
-  const activeRow = activeBar >= 0 ? Math.floor(activeBar / 4) : -1;
-
-  // Auto-scroll the active row into view as playback advances. Keyed on the row
-  // (not the playhead) so it only scrolls when the row actually changes.
-  React.useEffect(() => {
-    if (isPlaying && activeRow >= 0) {
-      activeRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [activeRow, isPlaying]);
-
-  const togglePlay = () => {
-    const el = audioElRef.current;
-    if (!el) return;
-    if (el.paused) void el.play(); else el.pause();
   };
 
   const openChordSelector = (barIndex: number, beatIndex: number) => {
@@ -844,6 +664,15 @@ export const EditorScreen: React.FC = () => {
     setSnackbar({ open: true, message: 'Settings saved' });
   };
 
+  // Apply a tuning immediately (used by the Tuner modal). Persists it and keeps
+  // the Settings-dialog fields in sync so the two views never disagree.
+  const applyTuning = (tuning: { name: string; notes: string[] }) => {
+    updateGlobalSettings({ tuning });
+    setTuningName(tuning.name);
+    setTuningNotes(tuning.notes.join(' '));
+    saveToCache();
+  };
+
   const handleSave = async () => {
     if (!currentComposition) {
       setSnackbar({ open: true, message: 'No composition to save' });
@@ -949,28 +778,9 @@ export const EditorScreen: React.FC = () => {
           <Tooltip title="Import from text">
             <IconButton onClick={() => setShowImportDialog(true)}><PostAddIcon /></IconButton>
           </Tooltip>
-          {/* OCR scan + mic note-capture + audio record/playback are hidden for
-              now (CAPTURE_FEATURES) — to revisit. Code below stays wired. */}
-          {CAPTURE_FEATURES && (
-            <>
-              <Tooltip title="Scan a photo">
-                <IconButton onClick={() => setShowScanDialog(true)}><DocumentScannerIcon /></IconButton>
-              </Tooltip>
-              <Tooltip title="Record a note into the selected cell">
-                <IconButton onClick={() => setShowRecordDialog(true)}><MicIcon /></IconButton>
-              </Tooltip>
-              <Tooltip title="Record audio for playback">
-                <IconButton onClick={() => setShowClipDialog(true)}><FiberManualRecordIcon /></IconButton>
-              </Tooltip>
-              {audioUrl && (
-                <Tooltip title={isPlaying ? 'Pause follow-along' : 'Play with karaoke follow-along'}>
-                  <IconButton color={isPlaying ? 'primary' : 'default'} onClick={togglePlay}>
-                    {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-                  </IconButton>
-                </Tooltip>
-              )}
-            </>
-          )}
+          <Tooltip title="Tuner">
+            <IconButton onClick={() => setShowTunerDialog(true)}><GraphicEqIcon /></IconButton>
+          </Tooltip>
           <Tooltip title="Rehearsal mode">
             <IconButton onClick={() => setRehearsalMode(true)}><MenuBookIcon /></IconButton>
           </Tooltip>
@@ -985,50 +795,6 @@ export const EditorScreen: React.FC = () => {
           </Tooltip>
         </Box>
       </Box>
-
-      {/* Hidden audio element drives follow-along; controlled by the Play button. */}
-      {CAPTURE_FEATURES && audioUrl && (
-        <audio
-          ref={audioElRef}
-          src={audioUrl}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => { setIsPlaying(false); setPlayhead(0); }}
-          onTimeUpdate={(e) => setPlayhead(e.currentTarget.currentTime)}
-        />
-      )}
-
-      {/* Playback / karaoke transport — shown when the composition has audio. */}
-      {CAPTURE_FEATURES && audioUrl && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
-          <Tooltip title={isPlaying ? 'Pause' : 'Play'}>
-            <IconButton size="small" color="primary" onClick={togglePlay}>
-              {isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
-            </IconButton>
-          </Tooltip>
-          <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums', minWidth: 40 }}>
-            {Math.floor(playhead / 60)}:{Math.floor(playhead % 60).toString().padStart(2, '0')}
-          </Typography>
-          <Slider
-            size="small"
-            min={0}
-            max={audioElRef.current?.duration && isFinite(audioElRef.current.duration) ? audioElRef.current.duration : Math.max(1, playhead)}
-            value={playhead}
-            onChange={(_, v) => {
-              const t = v as number;
-              setPlayhead(t);
-              if (audioElRef.current) audioElRef.current.currentTime = t;
-            }}
-            sx={{ mx: 1 }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-            Karaoke follow-along
-          </Typography>
-          <Tooltip title="Remove recording">
-            <IconButton size="small" onClick={() => void removeAudio()}><DeleteIcon fontSize="small" /></IconButton>
-          </Tooltip>
-        </Box>
-      )}
 
       {/* Page navigation */}
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
@@ -1140,28 +906,13 @@ export const EditorScreen: React.FC = () => {
                 // collide with the next row's lyrics.
                 <Box
                   key={rowIndex}
-                  ref={activeBar >= 0 && Math.floor(activeBar / 4) === rowIndex ? activeRowRef : undefined}
-                  sx={{
-                    mb: '12px',
-                    // Follow-along: subtly highlight the row the playhead is in.
-                    bgcolor: activeBar >= 0 && Math.floor(activeBar / 4) === rowIndex
-                      ? 'rgba(25,118,210,0.06)' : 'transparent',
-                    borderRadius: 1,
-                    transition: 'background-color 120ms',
-                  }}
+                  sx={{ mb: '12px', borderRadius: 1 }}
                 >
-                  {/* Lyrics for the row — justified edge-to-edge to fill the line.
-                      During playback the row's lyric sweeps left-to-right across
-                      its 4-bar span (karaoke). */}
+                  {/* Lyrics for the row — justified edge-to-edge to fill the line. */}
                   <LyricLine
                     value={barLyrics[rowIndex * 4] || ''}
                     width={CONTENT_WIDTH}
                     justify={lyricSpacing === 'stretch'}
-                    progress={
-                      activeBar >= 0 && Math.floor(activeBar / 4) === rowIndex
-                        ? ((activeBar % 4) + barProgress) / 4
-                        : undefined
-                    }
                     onChange={(text) => handleLyricsChange(rowIndex * 4, text)}
                   />
 
@@ -1568,32 +1319,14 @@ export const EditorScreen: React.FC = () => {
         onImport={handleImportRequest}
       />
 
-      {/* Capture dialogs hidden with the toolbar buttons (CAPTURE_FEATURES). */}
-      {CAPTURE_FEATURES && (
-        <>
-          <ScanPhotoDialog
-            open={showScanDialog}
-            onClose={() => setShowScanDialog(false)}
-            defaultChordsPerBar={chordsPerBar}
-            onImport={handleImportRequest}
-          />
-
-          <RecordNoteDialog
-            open={showRecordDialog}
-            onClose={() => setShowRecordDialog(false)}
-            hasTarget={noteTarget() !== null}
-            onStart={beginNoteRecording}
-            onNote={placeNextNote}
-          />
-
-          <RecordClipDialog
-            open={showClipDialog}
-            onClose={() => setShowClipDialog(false)}
-            onSave={handleClipSaved}
-            onAttachUrl={attachAudioUrl}
-          />
-        </>
-      )}
+      <TunerDialog
+        open={showTunerDialog}
+        onClose={() => setShowTunerDialog(false)}
+        tuningNotes={currentComposition.globalSettings.tuning.notes}
+        tuningName={currentComposition.globalSettings.tuning.name}
+        presets={ALTERNATE_TUNINGS}
+        onApplyTuning={applyTuning}
+      />
 
       {/* Import overwrite confirmation */}
       <Dialog open={showImportConfirm} onClose={() => setShowImportConfirm(false)}>
