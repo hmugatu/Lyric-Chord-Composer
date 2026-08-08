@@ -29,16 +29,12 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # Supabase credentials are inlined into the static bundle at build
-          # time. Both are repo *variables* (Settings → Secrets and variables →
-          # Actions → Variables) — neither is truly secret: the URL is public
-          # and the anon/publishable key is safe to expose in the bundle, since
-          # RLS is what enforces per-user isolation.
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          # Pin the auth magic-link redirect to the public site so links always
-          # return to the deployed app (must match a Supabase Redirect URL).
-          VITE_SITE_URL: https://hmugatu.github.io/Lyric-Chord-Composer/
+          # The Google OAuth client ID is inlined into the static bundle at
+          # build time. It's a repo *variable* (Settings → Secrets and variables
+          # → Actions → Variables), not a secret: public browser clients have no
+          # client secret, and access is constrained by the authorized
+          # JavaScript origins and the narrow `drive.file` scope.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

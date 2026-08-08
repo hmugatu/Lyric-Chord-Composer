@@ -1,74 +1,72 @@
 /**
- * Auth context backed by Supabase (email magic-link / passwordless).
+ * Auth context backed by Google (Drive) sign-in.
  *
- * Provides the current session + user and the sign-in / sign-out actions.
- * `App` gates its routes on this: no session → sign-in screen.
+ * Compositions live in the user's own Drive, so "signing in" means holding a
+ * valid Drive access token. `App` gates its routes on this: no session → sign-in
+ * screen.
+ *
+ * Tokens are held in memory only (see GoogleDriveProvider), so a reload has no
+ * stored session to restore. On mount we attempt a *silent* token request —
+ * while the user still has an active Google session and has already granted
+ * consent, this succeeds without any UI, so a reload is not a visible re-login.
  */
 
 import React from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient';
+import { googleDrive, type DriveUserInfo } from '../services/fileStorage/GoogleDriveProvider';
+import { resetRepo } from '../services/compositionsRepo';
 
 interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
+  /** The signed-in Google user, or null when signed out. */
+  session: DriveUserInfo | null;
+  user: DriveUserInfo | null;
   loading: boolean;
-  /** Send a magic link to the given email. */
-  signInWithEmail: (email: string) => Promise<void>;
+  /** Open the Google consent/account picker and connect Drive. */
+  signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = React.createContext<AuthContextValue | undefined>(undefined);
 
-// Where the magic link returns the user. Must be added to the Supabase Auth
-// "Redirect URLs" allowlist (and Site URL). In production we pin this to the
-// public site via VITE_SITE_URL (set in the deploy workflow) so links always
-// come back to the deployed app, not whatever origin the user signed in from.
-// Falls back to the current origin + BASE_URL for local dev, where
-// VITE_SITE_URL is unset. BASE_URL carries the GitHub Pages subpath
-// (e.g. /Lyric-Chord-Composer/); HashRouter picks up the route after.
-const emailRedirectTo =
-  import.meta.env.VITE_SITE_URL || `${window.location.origin}${import.meta.env.BASE_URL}`;
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session, setSession] = React.useState<Session | null>(null);
+  const [session, setSession] = React.useState<DriveUserInfo | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setLoading(false);
-    });
+    // Attempt to restore the session without prompting.
+    (async () => {
+      try {
+        if (await googleDrive.trySilentAuth()) {
+          const info = await googleDrive.getUserInfo();
+          if (active) setSession(info);
+        }
+      } catch (error) {
+        // Silent restore is best-effort; fall through to the sign-in screen.
+        console.warn('Silent Google sign-in failed:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
 
     return () => {
       active = false;
-      sub.subscription.unsubscribe();
     };
   }, []);
 
   const value = React.useMemo<AuthContextValue>(
     () => ({
       session,
-      user: session?.user ?? null,
+      user: session,
       loading,
-      signInWithEmail: async (email: string) => {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo },
-        });
-        if (error) throw error;
+      signIn: async () => {
+        await googleDrive.authenticate();
+        setSession(await googleDrive.getUserInfo());
       },
       signOut: async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
+        resetRepo();
+        await googleDrive.revokeAccess();
+        setSession(null);
       },
     }),
     [session, loading],

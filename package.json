@@ -14,7 +14,6 @@
     "@emotion/styled": "^11.13.0",
     "@mui/icons-material": "^6.1.0",
     "@mui/material": "^6.1.0",
-    "@supabase/supabase-js": "^2.110.1",
     "@tonaljs/chord": "^6.1.1",
     "@tonaljs/note": "^4.12.1",
     "@tonaljs/tonal": "^4.10.0",
@@ -30,7 +29,6 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "supabase": "^2.109.1",
     "typescript": "~5.9.2",
     "vite": "^6.0.7"
   }

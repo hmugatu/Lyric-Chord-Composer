@@ -8,31 +8,7 @@ import { Composition, Section, GlobalSettings } from '../models';
 import { STANDARD_TUNING } from '../models/Note';
 import { CompositionStorageService } from '../services/compositionService';
 import * as compositionsRepo from '../services/compositionsRepo';
-
-// One-time migration of pre-Supabase localStorage compositions into the user's
-// cloud account. Runs at most once per browser (guarded by MIGRATED_KEY).
-const LEGACY_CACHE_KEY = '@lyric-chord-composer:compositions';
-const LEGACY_METADATA_KEY = '@lyric-chord-composer:cache-metadata';
-const MIGRATED_KEY = '@lyric-chord-composer:migrated';
-
-async function migrateLegacyLocalCompositions(): Promise<void> {
-  if (localStorage.getItem(MIGRATED_KEY)) return;
-  try {
-    const raw = localStorage.getItem(LEGACY_CACHE_KEY);
-    if (raw) {
-      const legacy = JSON.parse(raw) as Composition[];
-      if (Array.isArray(legacy) && legacy.length > 0) {
-        await compositionsRepo.bulkUpsert(legacy);
-      }
-    }
-    // Clear legacy data and mark migrated so this never runs again.
-    localStorage.removeItem(LEGACY_CACHE_KEY);
-    localStorage.removeItem(LEGACY_METADATA_KEY);
-    localStorage.setItem(MIGRATED_KEY, new Date().toISOString());
-  } catch (error) {
-    console.error('Legacy composition migration failed:', error);
-  }
-}
+import { clearCache as clearCompositionCache } from '../services/compositionCache';
 
 interface CompositionState {
   // Current composition
@@ -197,9 +173,9 @@ export const useCompositionStore = create<CompositionState>()(
           state.currentComposition = null;
         }
       });
-      // Remove from the cloud (fire-and-forget; UI already updated).
+      // Remove from Drive (fire-and-forget; UI already updated).
       compositionsRepo.deleteComposition(id).catch((error) => {
-        console.error('Failed to delete composition from cloud:', error);
+        console.error('Failed to delete composition from Drive:', error);
       });
     },
 
@@ -342,7 +318,7 @@ export const useCompositionStore = create<CompositionState>()(
           state.isLoading = false;
         });
 
-        // Persist the imported composition to the cloud.
+        // Persist the imported composition (cache now, Drive shortly after).
         await compositionsRepo.upsertComposition(composition);
       } catch (error) {
         set((state) => {
@@ -379,7 +355,7 @@ export const useCompositionStore = create<CompositionState>()(
           state.isLoading = false;
         });
 
-        // Persist all imported compositions to the cloud.
+        // Persist all imported compositions (cache now, Drive shortly after).
         await compositionsRepo.bulkUpsert(imported);
       } catch (error) {
         set((state) => {
@@ -390,7 +366,7 @@ export const useCompositionStore = create<CompositionState>()(
       }
     },
 
-    // Persistence operations (Supabase-backed).
+    // Persistence operations (localStorage cache + Google Drive sync).
     // The `*Cache` names are kept so existing call sites don't need to change.
     loadFromCache: async () => {
       try {
@@ -415,7 +391,7 @@ export const useCompositionStore = create<CompositionState>()(
       }
     },
 
-    // Persist the current composition to the cloud. Called after every edit;
+    // Persist the current composition. Called after every edit;
     // per-composition upsert replaces the old "save the whole array" model.
     saveToCache: async () => {
       const current = get().currentComposition;
@@ -426,22 +402,21 @@ export const useCompositionStore = create<CompositionState>()(
           state.lastCacheUpdate = new Date();
         });
       } catch (error) {
-        console.error('Failed to save composition to cloud:', error);
+        console.error('Failed to save composition:', error);
       }
     },
 
     clearCache: async () => {
-      // Nothing to clear client-side; cloud data is authoritative. Kept for API
-      // compatibility with existing callers.
+      // Drops the local copy only. Drive still holds the compositions, so the
+      // next load re-populates the cache from there.
+      clearCompositionCache();
       set((state) => {
         state.lastCacheUpdate = null;
       });
     },
 
     initializeStore: async () => {
-      // One-time import of any pre-Supabase localStorage compositions, then load
-      // the user's compositions from the cloud. Requires an active session.
-      await migrateLegacyLocalCompositions();
+      // Loads from the local cache immediately, then reconciles against Drive.
       await get().loadFromCache();
     },
   }))

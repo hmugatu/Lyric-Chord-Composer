@@ -19,7 +19,7 @@ export interface StorageProvider {
   authenticate?(): Promise<void>;
   logout?(): Promise<void>;
   isAuthenticated?(): boolean;
-  getUserInfo?(): Promise<{ name: string; email: string }>;
+  getUserInfo?(): Promise<{ name: string; email: string; picture?: string }>;
 
   // File operations
   listFiles(): Promise<FileMetadata[]>;
@@ -36,6 +36,8 @@ export interface CloudProvider extends StorageProvider {
   refreshAccessToken?(): Promise<void>;
   revokeAccess?(): Promise<void>;
   syncFile?(fileId: string, content: string): Promise<FileMetadata>;
+  /** Overwrite an existing remote file in place, preserving its id. */
+  updateFile?(fileId: string, filename: string, content: string): Promise<FileMetadata>;
 }
 
 export type StorageProviderType = 'local' | 'google-drive' | 'dropbox' | 'onedrive';

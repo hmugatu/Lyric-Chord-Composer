@@ -6,6 +6,11 @@
 import type { Composition } from '../models';
 import type { FileMetadata } from './fileStorage/types';
 import { LocalFileProvider } from './fileStorage/LocalFileProvider';
+import {
+  deserializeComposition,
+  generateFilename,
+  serializeComposition,
+} from './compositionSerialization';
 
 export class CompositionStorageService {
   private localProvider: LocalFileProvider;
@@ -54,31 +59,14 @@ export class CompositionStorageService {
   }
 
   private serializeComposition(composition: Composition): string {
-    return JSON.stringify(composition, null, 2);
+    return serializeComposition(composition);
   }
 
   private deserializeComposition(content: string): Composition {
-    try {
-      const data = JSON.parse(content);
-      if (!data.id || !data.title) {
-        throw new Error('Invalid composition: missing required fields (id, title)');
-      }
-      return data as Composition;
-    } catch (error) {
-      throw new Error(`Failed to parse composition: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    return deserializeComposition(content);
   }
 
   private generateFilename(composition: Composition): string {
-    const sanitizedTitle = this.sanitizeFilename(composition.title);
-    return `${sanitizedTitle}-${composition.id}.hmlcc`;
-  }
-
-  private sanitizeFilename(title: string): string {
-    return title
-      .replace(/[^a-z0-9-_\s]/gi, '')
-      .replace(/\s+/g, '-')
-      .toLowerCase()
-      .substring(0, 50);
+    return generateFilename(composition);
   }
 }
