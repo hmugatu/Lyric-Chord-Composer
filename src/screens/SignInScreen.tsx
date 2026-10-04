@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Box, Card, CardContent, Typography, Button, Alert, CircularProgress,
+  Box, Card, CardContent, Typography, Button, Alert, CircularProgress, Link,
 } from '@mui/material';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import CloudQueueIcon from '@mui/icons-material/CloudQueue';
@@ -64,6 +64,12 @@ export const SignInScreen: React.FC = () => {
           >
             {connecting ? 'Connecting…' : 'Sign in with Google'}
           </Button>
+
+          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 2, textAlign: 'center' }}>
+            <Link href={`${import.meta.env.BASE_URL}privacy.html`}>Privacy Policy</Link>
+            {' · '}
+            <Link href={`${import.meta.env.BASE_URL}terms.html`}>Terms of Service</Link>
+          </Typography>
         </CardContent>
       </Card>
     </Box>
