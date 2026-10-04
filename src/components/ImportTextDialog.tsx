@@ -9,7 +9,9 @@ interface ImportTextDialogProps {
   onClose: () => void;
   /** The composition's current chords-per-bar, used to seed the selector. */
   defaultChordsPerBar?: number;
-  onImport: (text: string, barsPerLine: number, chordsPerBar: number) => void;
+  /** The composition's bars per row, used to seed bars/row and bars/line. */
+  defaultBarsPerRow?: number;
+  onImport: (text: string, barsPerLine: number, chordsPerBar: number, barsPerRow: number) => void;
 }
 
 const PLACEHOLDER = `Paste a song as chords over lyrics, e.g.
@@ -26,6 +28,7 @@ So take from me`;
 const ACCEPT = '.txt,.md,.markdown,.html,.htm,.crd,.cho,.chopro,.chordpro,text/plain,text/html';
 
 const CHORDS_PER_BAR_OPTIONS = [1, 2, 3, 4, 6, 8];
+const BARS_PER_ROW_OPTIONS = [2, 3, 4];
 
 /** Reduce dropped HTML to plain text, preserving line breaks from block tags. */
 function htmlToText(html: string): string {
@@ -46,17 +49,23 @@ async function readFile(file: File): Promise<string> {
 }
 
 export const ImportTextDialog: React.FC<ImportTextDialogProps> = ({
-  open, onClose, onImport, defaultChordsPerBar = 4,
+  open, onClose, onImport, defaultChordsPerBar = 4, defaultBarsPerRow = 4,
 }) => {
   const [text, setText] = React.useState('');
   const [dragOver, setDragOver] = React.useState(false);
-  const [barsPerLine, setBarsPerLine] = React.useState(2);
+  const [barsPerRow, setBarsPerRow] = React.useState(defaultBarsPerRow);
+  const [barsPerLine, setBarsPerLine] = React.useState(defaultBarsPerRow);
   const [chordsPerBar, setChordsPerBar] = React.useState(defaultChordsPerBar);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
-    if (open) { setText(''); setChordsPerBar(defaultChordsPerBar); }
-  }, [open, defaultChordsPerBar]);
+    if (open) {
+      setText('');
+      setChordsPerBar(defaultChordsPerBar);
+      setBarsPerRow(defaultBarsPerRow);
+      setBarsPerLine(defaultBarsPerRow);
+    }
+  }, [open, defaultChordsPerBar, defaultBarsPerRow]);
 
   const loadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -112,8 +121,24 @@ export const ImportTextDialog: React.FC<ImportTextDialogProps> = ({
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, flexWrap: 'wrap', gap: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto' }}>
-          <Typography variant="body2" color="text.secondary">Bars/line</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 'auto', flexWrap: 'wrap' }}>
+          <Typography variant="body2" color="text.secondary">Bars/row</Typography>
+          {/* Row width for the whole song (also a Settings option). */}
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={barsPerRow}
+            onChange={(_, v) => {
+              if (!v) return;
+              setBarsPerRow(v);
+              setBarsPerLine(v);
+            }}
+          >
+            {BARS_PER_ROW_OPTIONS.map((n) => (
+              <ToggleButton key={n} value={n}>{n}</ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>Bars/line</Typography>
           {/* How many bars each pasted line occupies; lines pack together. */}
           <ToggleButtonGroup
             size="small"
@@ -121,9 +146,9 @@ export const ImportTextDialog: React.FC<ImportTextDialogProps> = ({
             value={barsPerLine}
             onChange={(_, v) => v && setBarsPerLine(v)}
           >
-            <ToggleButton value={1}>1</ToggleButton>
-            <ToggleButton value={2}>2</ToggleButton>
-            <ToggleButton value={4}>4</ToggleButton>
+            {[1, 2, 3, 4].filter((n) => n <= barsPerRow).map((n) => (
+              <ToggleButton key={n} value={n}>{n}</ToggleButton>
+            ))}
           </ToggleButtonGroup>
           <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>Chords/bar</Typography>
           <ToggleButtonGroup
@@ -142,7 +167,7 @@ export const ImportTextDialog: React.FC<ImportTextDialogProps> = ({
         <Button
           variant="contained"
           disabled={!text.trim()}
-          onClick={() => onImport(text, barsPerLine, chordsPerBar)}
+          onClick={() => onImport(text, barsPerLine, chordsPerBar, barsPerRow)}
         >
           Import
         </Button>

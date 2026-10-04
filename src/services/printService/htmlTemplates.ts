@@ -445,7 +445,7 @@ async function generateStaffSvg(
     await renderStaffToContainer(container, {
       width: ROW_WIDTH,
       height: STAFF_HEIGHT,
-      numMeasures: 4,
+      numMeasures: composition.globalSettings.barsPerRow || 4,
       tsBeats: ts?.beats || 4,
       tsBeatValue: ts?.beatValue || 4,
       tuning: composition.globalSettings.tuning?.notes || ['E2', 'A2', 'D3', 'G3', 'B3', 'E4'],
@@ -502,7 +502,8 @@ async function generatePageHtml(
   const barTab = page.barTab || {};
   const ts = composition.globalSettings.timeSignature;
   const cellsPerBar = cellsPerBarFor(ts?.beats || 4, ts?.beatValue || 4);
-  const layout = getMeasureLayout(ROW_WIDTH, 4);
+  const barsPerRow = composition.globalSettings.barsPerRow || 4;
+  const layout = getMeasureLayout(ROW_WIDTH, barsPerRow);
   // Lyric spacing follows the editor setting: 'stretch' justifies edge-to-edge
   // (text-align-last makes the single/last line stretch), 'left' left-aligns.
   const lyricAlign =
@@ -525,14 +526,14 @@ async function generatePageHtml(
   const showStaff = composition.globalSettings.showStaff !== false;
   const renderStaff = options.includeNotation && showStaff;
 
-  // Rows of 4 bars each — 4 rows (16 bars) when the staff is drawn, 7 (28 bars)
+  // Rows of barsPerRow bars each — 4 rows when the staff is drawn, 7
   // when it isn't, matching the editor. Always rendered, content or not.
   const rowsThisPage = renderStaff ? ROWS_WITH_STAFF : ROWS_WITHOUT_STAFF;
   for (let rowIndex = 0; rowIndex < rowsThisPage; rowIndex++) {
-    const rowStartBar = rowIndex * 4;
+    const rowStartBar = rowIndex * barsPerRow;
 
     const tabSvg = options.includeTablature
-      ? generateTablatureHtml(barTab, ROW_WIDTH, TAB_HEIGHT, cellsPerBar, rowStartBar, 4)
+      ? generateTablatureHtml(barTab, ROW_WIDTH, TAB_HEIGHT, cellsPerBar, rowStartBar, barsPerRow)
       : '';
     const staffSvg = renderStaff
       ? await generateStaffSvg(barTab, rowStartBar, composition)
@@ -546,7 +547,7 @@ async function generatePageHtml(
     // sits at the 16th cell its frets were stamped to (see stampChordToTab),
     // so chords line up exactly with their tab columns and staff notes.
     const chordTexts: string[] = [];
-    for (let colIndex = 0; colIndex < 4; colIndex++) {
+    for (let colIndex = 0; colIndex < barsPerRow; colIndex++) {
       const barIndex = rowStartBar + colIndex;
       const beatChords = page.barBeatChords[barIndex] || [];
       beatChords.forEach((chordName, beatIndex) => {

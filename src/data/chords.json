@@ -64,6 +64,14 @@
     "commonFingeringNotes": "x-0-2-2-0-0 drop index from A major B string"
   },
   {
+    "name": "Asus2/F#",
+    "startingFret": 0,
+    "fingering": ["2", "x", "2", "2", "0", "0"],
+    "openStrings": [4, 5],
+    "mutedStrings": [1],
+    "commonFingeringNotes": "2(index)-x-2(middle)-2(ring)-0-0 Asus2 with F# bass on low E"
+  },
+  {
     "name": "Asus4",
     "startingFret": 0,
     "fingering": ["x", "0", "2", "2", "3", "0"],

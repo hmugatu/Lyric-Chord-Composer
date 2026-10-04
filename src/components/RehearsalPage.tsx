@@ -10,7 +10,6 @@ import type { Composition } from '../models';
 import type { PageData } from '../models/Composition';
 
 const PAPER_COLOR = '#f4ecd8';
-const BARS_PER_ROW = 4;
 
 interface RehearsalPageProps {
   page: PageData;
@@ -43,7 +42,9 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
   const tsBeats = settings.timeSignature.beats;
   const tsBeatValue = settings.timeSignature.beatValue;
   const cellsPerBar = cellsPerBarFor(tsBeats, tsBeatValue);
-  const rowLayout = getMeasureLayout(contentWidth, BARS_PER_ROW);
+  const barsPerRow = settings.barsPerRow || 4;
+  const rowCols = Array.from({ length: barsPerRow }, (_, i) => i);
+  const rowLayout = getMeasureLayout(contentWidth, barsPerRow);
   const paperHeight = Math.round((paperWidth * 11) / 8.5);
 
   const barLyrics = page.barLyrics || [];
@@ -95,14 +96,15 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
 
       <Box sx={{ width: contentWidth, mx: `${paperMargin}px`, pt: 0, pb: '10px' }}>
         {Array.from({ length: rows }, (_, rowIndex) => {
-          const rowBeatChords = [0, 1, 2, 3]
-            .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || emptyBar)
+          const rowStartBar = rowIndex * barsPerRow;
+          const rowBeatChords = rowCols
+            .map((colIndex) => barBeatChords[rowStartBar + colIndex] || emptyBar)
             .flat();
 
           return (
             <Box key={rowIndex} sx={{ mb: '12px' }}>
               <LyricLine
-                value={barLyrics[rowIndex * 4] || ''}
+                value={barLyrics[rowStartBar] || ''}
                 width={contentWidth}
                 justify={settings.lyricSpacing !== 'left'}
                 readOnly
@@ -111,8 +113,8 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
 
               {/* Chord names — spans (not buttons); empty slots render nothing. */}
               <Box sx={{ position: 'relative', height: 24, mb: '5px' }}>
-                {[0, 1, 2, 3].map((colIndex) => {
-                  const barIndex = rowIndex * 4 + colIndex;
+                {rowCols.map((colIndex) => {
+                  const barIndex = rowStartBar + colIndex;
                   const barWidth = colIndex === 0 ? rowLayout.firstMeasureWidth : rowLayout.otherMeasureWidth;
                   const reserve = colIndex === 0 ? CLEF_RESERVE : 0;
                   const beatWidth = (barWidth - reserve) / chordsPerBar;
@@ -147,12 +149,12 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
                   chordsData={chordsData}
                   width={contentWidth}
                   height={65}
-                  numMeasures={4}
+                  numMeasures={barsPerRow}
                   beatsPerBar={chordsPerBar}
                   tsBeats={tsBeats}
                   tsBeatValue={tsBeatValue}
                   paperColor={PAPER_COLOR}
-                  rowStartBar={rowIndex * 4}
+                  rowStartBar={rowStartBar}
                   barTab={barTab}
                   /* no onCellClick → read-only */
                 />
@@ -164,14 +166,14 @@ export const RehearsalPage: React.FC<RehearsalPageProps> = ({
                     beatChords={rowBeatChords}
                     width={contentWidth}
                     height={150}
-                    numMeasures={4}
+                    numMeasures={barsPerRow}
                     beatsPerBar={chordsPerBar}
                     tsBeats={tsBeats}
                     tsBeatValue={tsBeatValue}
                     tuning={settings.tuning.notes}
                     keySignature={settings.key}
                     barTab={barTab}
-                    rowStartBar={rowIndex * 4}
+                    rowStartBar={rowStartBar}
                   />
                 </Box>
               )}

@@ -38,15 +38,17 @@ interface PageState {
   barTab?: Record<string, TabCell>;
 }
 
-// A page is a grid of rows x 4 bars. Rows shown depend on the staff toggle:
-// with the staff there's room for 4 rows (16 bars); without it, 7 rows (28 bars).
-// Page data is always allocated at the larger size so toggling never drops bars.
+// A page is a grid of rows x barsPerRow bars (2-4, per composition; default 4).
+// Rows shown depend on the staff toggle: with the staff there's room for 4 rows;
+// without it, 7 rows. Page data is always allocated at the largest size
+// (7 rows x 4 bars) so toggling never drops bars.
 
-const BARS_PER_ROW = 4;
+const MAX_BARS_PER_ROW = 4;
+const BARS_PER_ROW_OPTIONS = [2, 3, 4];
 const ROWS_WITH_STAFF = 4;
-const ROWS_WITHOUT_STAFF = 7; // 28 bars — fills the page height without the staff
+const ROWS_WITHOUT_STAFF = 7; // fills the page height without the staff
 const MAX_ROWS_PER_PAGE = ROWS_WITHOUT_STAFF;
-const MAX_BARS_PER_PAGE = MAX_ROWS_PER_PAGE * BARS_PER_ROW; // 28
+const MAX_BARS_PER_PAGE = MAX_ROWS_PER_PAGE * MAX_BARS_PER_ROW; // 28
 
 // How many rows/bars are visible for the current staff setting.
 const rowsForStaff = (showStaff: boolean) => (showStaff ? ROWS_WITH_STAFF : ROWS_WITHOUT_STAFF);
@@ -97,6 +99,18 @@ const flattenPages = (pages: PageState[], slots: number, oldBarsPerPage: number)
     end--;
   }
   return bars.slice(0, end);
+};
+
+// Lyrics live on each row's first bar. After a bars-per-row change, move every
+// lyric to the start of the new row its bar falls in, joining any that collide.
+const reflowLyrics = (bars: FlatBar[], barsPerRow: number): FlatBar[] => {
+  const out = bars.map((b) => ({ ...b, lyric: '' }));
+  bars.forEach((b, i) => {
+    if (!b.lyric.trim()) return;
+    const target = out[Math.floor(i / barsPerRow) * barsPerRow];
+    target.lyric = target.lyric ? `${target.lyric} / ${b.lyric}` : b.lyric;
+  });
+  return out;
 };
 
 // Re-chunk a flat bar sequence into fixed-size pages (MAX_BARS_PER_PAGE slots
@@ -172,10 +186,6 @@ const DURATION_OPTIONS: { value: NoteDuration; label: string }[] = [
   { value: 'sixteenth', label: 'Sixteenth' },
 ];
 
-// Shared per-row measure geometry (also used by Tablature/StaffNotes/print)
-// so the chord slots, tab fret numbers, and staff notes all line up vertically.
-const rowLayout = getMeasureLayout(CONTENT_WIDTH, 4);
-
 // Fixed-width right-hand column so every settings toggle lines up vertically,
 // whether it sits beside a field or a labeled row.
 const TOGGLE_COL = 56;
@@ -222,7 +232,7 @@ export const EditorScreen: React.FC = () => {
   const [showTunerDialog, setShowTunerDialog] = React.useState(false);
   const [showImportConfirm, setShowImportConfirm] = React.useState(false);
   const [pendingImport, setPendingImport] = React.useState<{
-    text: string; barsPerLine: number; chordsPerBar: number;
+    text: string; barsPerLine: number; chordsPerBar: number; barsPerRow: number;
   } | null>(null);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isPrinting, setIsPrinting] = React.useState(false);
@@ -241,6 +251,7 @@ export const EditorScreen: React.FC = () => {
   const [pendingChordsPerBar, setPendingChordsPerBar] = React.useState(1);
   const [pendingLyricSpacing, setPendingLyricSpacing] = React.useState<'stretch' | 'left'>('stretch');
   const [pendingShowStaff, setPendingShowStaff] = React.useState(true);
+  const [pendingBarsPerRow, setPendingBarsPerRow] = React.useState(4);
   const [pendingTitle, setPendingTitle] = React.useState('');
   const [pendingArtist, setPendingArtist] = React.useState('');
 
@@ -261,10 +272,15 @@ export const EditorScreen: React.FC = () => {
   const chordsPerBar = currentComposition?.globalSettings.chordsPerBar || 4;
   const lyricSpacing = currentComposition?.globalSettings.lyricSpacing || 'stretch';
   const showStaff = currentComposition?.globalSettings.showStaff !== false; // default on
-  // Rows/bars shown per page depend on the staff: 4 rows (16 bars) with the
-  // staff, 7 rows (28 bars) without it. Data is stored at MAX size regardless.
+  const barsPerRow = currentComposition?.globalSettings.barsPerRow || 4;
+  // Rows/bars shown per page depend on the staff: 4 rows with the staff, 7
+  // without it, each barsPerRow wide. Data is stored at MAX size regardless.
   const visibleRows = rowsForStaff(showStaff);
-  const visibleBars = visibleRows * BARS_PER_ROW;
+  const visibleBars = visibleRows * barsPerRow;
+  // Shared per-row measure geometry (also used by Tablature/StaffNotes/print)
+  // so the chord slots, tab fret numbers, and staff notes all line up vertically.
+  const rowLayout = getMeasureLayout(CONTENT_WIDTH, barsPerRow);
+  const rowCols = Array.from({ length: barsPerRow }, (_, i) => i);
   const tsBeats = currentComposition?.globalSettings.timeSignature.beats || 4;
   const tsBeatValue = currentComposition?.globalSettings.timeSignature.beatValue || 4;
 
@@ -297,16 +313,19 @@ export const EditorScreen: React.FC = () => {
 
   // Import pasted chords-over-lyrics text into the current composition, replacing
   // its pages. Prompts first when there is existing content to overwrite.
-  const runImport = (text: string, barsPerLine: number, importChordsPerBar: number) => {
+  const runImport = (text: string, barsPerLine: number, importChordsPerBar: number, importBarsPerRow: number) => {
+    const importBarsPerPage = visibleRows * importBarsPerRow;
     const cellsPerBar = Math.max(1, Math.round((tsBeats * 16) / tsBeatValue));
-    const result = textToPages(text, importChordsPerBar, chordsData, cellsPerBar, barsPerLine, visibleBars);
+    const result = textToPages(text, importChordsPerBar, chordsData, cellsPerBar, barsPerLine, importBarsPerPage, importBarsPerRow);
     setAllPages(result.pages);
     setCurrentPage(0);
     if (currentComposition) {
-      // Chords-per-bar is a global grid setting; keep it in sync with the import.
-      const settings =
-        importChordsPerBar !== chordsPerBar ? { chordsPerBar: importChordsPerBar } : undefined;
-      if (settings) updateGlobalSettings(settings);
+      // Chords-per-bar and bars-per-row are global grid settings; keep them in
+      // sync with the import.
+      const settings: { chordsPerBar?: number; barsPerRow?: number } = {};
+      if (importChordsPerBar !== chordsPerBar) settings.chordsPerBar = importChordsPerBar;
+      if (importBarsPerRow !== barsPerRow) settings.barsPerRow = importBarsPerRow;
+      if (Object.keys(settings).length) updateGlobalSettings(settings);
       updateComposition({ notes: notesJson(result.pages) });
       saveToCache();
     }
@@ -316,13 +335,13 @@ export const EditorScreen: React.FC = () => {
     setSnackbar({ open: true, message: `Imported ${result.filledRows} line(s)${unmapped}` });
   };
 
-  const handleImportRequest = (text: string, barsPerLine: number, importChordsPerBar: number) => {
+  const handleImportRequest = (text: string, barsPerLine: number, importChordsPerBar: number, importBarsPerRow: number) => {
     setShowImportDialog(false);
     if (hasContent(allPages)) {
-      setPendingImport({ text, barsPerLine, chordsPerBar: importChordsPerBar });
+      setPendingImport({ text, barsPerLine, chordsPerBar: importChordsPerBar, barsPerRow: importBarsPerRow });
       setShowImportConfirm(true);
     } else {
-      runImport(text, barsPerLine, importChordsPerBar);
+      runImport(text, barsPerLine, importChordsPerBar, importBarsPerRow);
     }
   };
 
@@ -598,6 +617,7 @@ export const EditorScreen: React.FC = () => {
     setPendingChordsPerBar(chordsPerBar);
     setPendingLyricSpacing(lyricSpacing);
     setPendingShowStaff(showStaff);
+    setPendingBarsPerRow(barsPerRow);
     setPendingTitle(currentComposition?.title ?? '');
     setPendingArtist(currentComposition?.artist ?? '');
     setShowSettingsDialog(true);
@@ -627,13 +647,16 @@ export const EditorScreen: React.FC = () => {
       tuning,
       lyricSpacing: pendingLyricSpacing,
       showStaff: pendingShowStaff,
+      barsPerRow: pendingBarsPerRow,
     });
     // Re-slice chords-per-bar and/or reflow bars across pages when the staff
-    // toggles. Both derive from the same `allPages`, so do them together off one
-    // snapshot rather than through two handlers that would race on stale state.
+    // toggles or the row width changes. All derive from the same `allPages`, so
+    // do them together off one snapshot rather than through separate handlers
+    // that would race on stale state.
     const chordsChanged = pendingChordsPerBar !== chordsPerBar;
     const staffChanged = pendingShowStaff !== showStaff;
-    if (chordsChanged || staffChanged) {
+    const rowWidthChanged = pendingBarsPerRow !== barsPerRow;
+    if (chordsChanged || staffChanged || rowWidthChanged) {
       // Apply the chords-per-bar reslice first so flattened bars carry the new
       // slot count; the total number of bars is unaffected.
       let pages = allPages;
@@ -643,13 +666,14 @@ export const EditorScreen: React.FC = () => {
           barBeatChords: page.barBeatChords.map((bar) => resliceBar(bar, chordsPerBar, pendingChordsPerBar)),
         }));
       }
-      // Toggling the staff changes bars-per-page (16 with, 28 without); tear the
+      // Toggling the staff or the row width changes bars-per-page; tear the
       // pages down to one flat bar list and rebuild them from scratch so no stale
       // page (e.g. a now-out-of-range 4th page) can survive. 60 bars stay 60 bars.
-      if (staffChanged) {
-        const oldBarsPerPage = rowsForStaff(showStaff) * BARS_PER_ROW;
-        const newBarsPerPage = rowsForStaff(pendingShowStaff) * BARS_PER_ROW;
-        const flat = flattenPages(pages, pendingChordsPerBar, oldBarsPerPage);
+      if (staffChanged || rowWidthChanged) {
+        const oldBarsPerPage = rowsForStaff(showStaff) * barsPerRow;
+        const newBarsPerPage = rowsForStaff(pendingShowStaff) * pendingBarsPerRow;
+        let flat = flattenPages(pages, pendingChordsPerBar, oldBarsPerPage);
+        if (rowWidthChanged) flat = reflowLyrics(flat, pendingBarsPerRow);
         pages = barsToPages(flat, newBarsPerPage, pendingChordsPerBar);
       }
       setAllPages(pages);
@@ -897,8 +921,9 @@ export const EditorScreen: React.FC = () => {
           <Box sx={{ width: CONTENT_WIDTH, mx: `${PAPER_MARGIN}px`, pt: 0, pb: '10px' }}>
             {Array.from({ length: visibleRows }, (_, rowIndex) => {
               const emptyBar = Array(chordsPerBar).fill('');
-              const rowBeatChords = [0, 1, 2, 3]
-                .map((colIndex) => barBeatChords[rowIndex * 4 + colIndex] || emptyBar)
+              const rowStartBar = rowIndex * barsPerRow;
+              const rowBeatChords = rowCols
+                .map((colIndex) => barBeatChords[rowStartBar + colIndex] || emptyBar)
                 .flat();
 
               return (
@@ -910,18 +935,18 @@ export const EditorScreen: React.FC = () => {
                 >
                   {/* Lyrics for the row — justified edge-to-edge to fill the line. */}
                   <LyricLine
-                    value={barLyrics[rowIndex * 4] || ''}
+                    value={barLyrics[rowStartBar] || ''}
                     width={CONTENT_WIDTH}
                     justify={lyricSpacing === 'stretch'}
-                    onChange={(text) => handleLyricsChange(rowIndex * 4, text)}
+                    onChange={(text) => handleLyricsChange(rowStartBar, text)}
                   />
 
                   {/* Chord slots — each centered over the 16th cell its frets are
                       stamped to (see stampChordToTab), so names line up with
                       their tab columns. Same geometry as Tablature/print. */}
                   <Box sx={{ position: 'relative', height: 24, mb: '5px' }}>
-                    {[0, 1, 2, 3].map((colIndex) => {
-                      const barIndex = rowIndex * 4 + colIndex;
+                    {rowCols.map((colIndex) => {
+                      const barIndex = rowStartBar + colIndex;
                       const barWidth = colIndex === 0 ? rowLayout.firstMeasureWidth : rowLayout.otherMeasureWidth;
                       const reserve = colIndex === 0 ? CLEF_RESERVE : 0;
                       const beatWidth = (barWidth - reserve) / chordsPerBar;
@@ -960,12 +985,12 @@ export const EditorScreen: React.FC = () => {
                       chordsData={chordsData}
                       width={CONTENT_WIDTH}
                       height={65}
-                      numMeasures={4}
+                      numMeasures={barsPerRow}
                       beatsPerBar={chordsPerBar}
                       tsBeats={tsBeats}
                       tsBeatValue={tsBeatValue}
                       paperColor={PAPER_COLOR}
-                      rowStartBar={rowIndex * 4}
+                      rowStartBar={rowStartBar}
                       barTab={barTab}
                       onCellClick={openTabCell}
                     />
@@ -982,14 +1007,14 @@ export const EditorScreen: React.FC = () => {
                         beatChords={rowBeatChords}
                         width={CONTENT_WIDTH}
                         height={150}
-                        numMeasures={4}
+                        numMeasures={barsPerRow}
                         beatsPerBar={chordsPerBar}
                         tsBeats={currentComposition.globalSettings.timeSignature.beats}
                         tsBeatValue={currentComposition.globalSettings.timeSignature.beatValue}
                         tuning={currentComposition.globalSettings.tuning.notes}
                         keySignature={currentComposition.globalSettings.key}
                         barTab={barTab}
-                        rowStartBar={rowIndex * 4}
+                        rowStartBar={rowStartBar}
                       />
                     </Box>
                   )}
@@ -1273,6 +1298,24 @@ export const EditorScreen: React.FC = () => {
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
               <Box>
+                <Typography variant="body2">Bars per row</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Bars under each lyric line
+                </Typography>
+              </Box>
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={pendingBarsPerRow}
+                onChange={(_, v) => v && setPendingBarsPerRow(v)}
+              >
+                {BARS_PER_ROW_OPTIONS.map((n) => (
+                  <ToggleButton key={n} value={n}>{n}</ToggleButton>
+                ))}
+              </ToggleButtonGroup>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.5 }}>
+              <Box>
                 <Typography variant="body2">Lyric spacing</Typography>
                 <Typography variant="caption" color="text.secondary">
                   How words fill each line
@@ -1291,7 +1334,7 @@ export const EditorScreen: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setPendingLyricSpacing(lyricSpacing); setPendingShowStaff(showStaff); setShowSettingsDialog(false); }}>Cancel</Button>
+          <Button onClick={() => { setPendingChordsPerBar(chordsPerBar); setPendingLyricSpacing(lyricSpacing); setPendingShowStaff(showStaff); setPendingBarsPerRow(barsPerRow); setShowSettingsDialog(false); }}>Cancel</Button>
           <Button variant="contained" onClick={handleSettingsSave}>Save</Button>
         </DialogActions>
       </Dialog>
@@ -1316,6 +1359,7 @@ export const EditorScreen: React.FC = () => {
         open={showImportDialog}
         onClose={() => setShowImportDialog(false)}
         defaultChordsPerBar={chordsPerBar}
+        defaultBarsPerRow={barsPerRow}
         onImport={handleImportRequest}
       />
 
@@ -1345,7 +1389,7 @@ export const EditorScreen: React.FC = () => {
             onClick={() => {
               setShowImportConfirm(false);
               if (pendingImport) {
-                runImport(pendingImport.text, pendingImport.barsPerLine, pendingImport.chordsPerBar);
+                runImport(pendingImport.text, pendingImport.barsPerLine, pendingImport.chordsPerBar, pendingImport.barsPerRow);
               }
             }}
           >

@@ -8,9 +8,9 @@
  *
  * Brackets are section labels ([Chorus], [Verse 2], [Bridge]) — not chords.
  *
- * Mapping rule (chosen with the user): one pasted line = one 4-bar row (the
- * editor renders lyrics once per 4-bar row). The line's lyric fills the row's
- * full-width lyric input; its chords spread across the row's 4 bars. Each placed
+ * Mapping rule (chosen with the user): one pasted line = one row of barsPerRow bars (the
+ * editor renders lyrics once per row). The line's lyric fills the row's
+ * full-width lyric input; its chords spread across the row's bars. Each placed
  * chord also stamps its fingering into the tab grid (barTab), which is what the
  * staff notes are drawn from — so imported chords arrive with tab + notation,
  * exactly like manually placing a chord in the editor.
@@ -54,11 +54,11 @@ export interface ImportResult {
   unmappedChords: string[];
 }
 
-const BARS_PER_ROW = 4;
+const MAX_BARS_PER_ROW = 4;
 // Max page size for allocation (7 rows = 28 bars). Actual pagination boundary
 // is passed in (16 with the staff shown, 28 without).
 const MAX_ROWS_PER_PAGE = 7;
-const BARS_PER_PAGE = MAX_ROWS_PER_PAGE * BARS_PER_ROW; // 28
+const BARS_PER_PAGE = MAX_ROWS_PER_PAGE * MAX_BARS_PER_ROW; // 28
 
 // A chord token: root, optional accidental, optional quality/extension, optional
 // slash bass. Deliberately permissive — anything matching is treated as a chord.
@@ -158,16 +158,28 @@ interface Block {
   chords: string[]; // raw chord tokens, left-to-right
   lyric: string;
   section?: string;
+  /** Blank line(s) preceded this block — start it on a fresh row. */
+  newRow?: boolean;
 }
 
 /** Parse cleaned lines into an ordered list of content blocks. */
 export function parseLines(lines: string[]): Block[] {
   const blocks: Block[] = [];
   let pendingSection: string | undefined;
+  let pendingBreak = false;
+
+  const push = (block: Block) => {
+    blocks.push({ ...block, section: pendingSection, newRow: pendingBreak || undefined });
+    pendingSection = undefined;
+    pendingBreak = false;
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!line.trim()) continue;
+    if (!line.trim()) {
+      if (blocks.length > 0) pendingBreak = true;
+      continue;
+    }
 
     if (isSectionLine(line)) {
       pendingSection = line.trim();
@@ -178,18 +190,15 @@ export function parseLines(lines: string[]): Block[] {
       const chords = tokens(line);
       const next = lines[i + 1];
       if (next !== undefined && next.trim() && !isChordLine(next) && !isSectionLine(next)) {
-        blocks.push({ chords, lyric: next.trim(), section: pendingSection });
-        pendingSection = undefined;
+        push({ chords, lyric: next.trim() });
         i++;
       } else {
-        blocks.push({ chords, lyric: '', section: pendingSection });
-        pendingSection = undefined;
+        push({ chords, lyric: '' });
       }
       continue;
     }
 
-    blocks.push({ chords: [], lyric: line.trim(), section: pendingSection });
-    pendingSection = undefined;
+    push({ chords: [], lyric: line.trim() });
   }
 
   return blocks;
@@ -225,8 +234,9 @@ function stampFingering(
  * @param cellsPerBar 16th-note cells per bar (from time signature) for tab placement
  * @param barsPerLine how many bars each pasted line occupies before the next
  *        line continues; lines pack into consecutive bars (1|2|4)
- * @param barsPerPage bars before a new page starts (16 with the staff shown,
- *        24 without). Pages are still allocated at the max size (24).
+ * @param barsPerPage bars before a new page starts (rows shown x barsPerRow).
+ *        Pages are still allocated at the max size (28).
+ * @param barsPerRow bars in each row (2|3|4); one row carries one lyric line
  */
 export function textToPages(
   text: string,
@@ -235,12 +245,14 @@ export function textToPages(
   cellsPerBar: number,
   barsPerLine = 2,
   barsPerPage = BARS_PER_PAGE,
+  barsPerRow = MAX_BARS_PER_ROW,
 ): ImportResult {
   const slots = chordsPerBar > 0 ? chordsPerBar : 4;
   const cells = cellsPerBar > 0 ? cellsPerBar : 16;
-  const spread = Math.min(BARS_PER_ROW, Math.max(1, barsPerLine));
+  const rowBars = Math.min(MAX_BARS_PER_ROW, Math.max(1, barsPerRow));
+  const spread = Math.min(rowBars, Math.max(1, barsPerLine));
   // Round to whole rows so a page never splits mid-row.
-  const pageBars = Math.max(BARS_PER_ROW, Math.round(barsPerPage / BARS_PER_ROW) * BARS_PER_ROW);
+  const pageBars = Math.max(rowBars, Math.round(barsPerPage / rowBars) * rowBars);
   const noteDuration = durationForSlots(slots);
   const index = buildCatalogIndex(catalog);
   const blocks = parseLines(cleanInput(text));
@@ -263,28 +275,34 @@ export function textToPages(
   let bar = 0; // global bar cursor
 
   blocks.forEach((block) => {
+    // A blank line in the paste means "new row": skip to the next row boundary.
+    if (block.newRow) bar = Math.ceil(bar / rowBars) * rowBars;
     const startBar = bar;
 
     // Attach the lyric to the ROW that contains this line's first bar (only one
     // lyric input renders per 4-bar row). When several packed lines share a row,
     // join their lyrics so all the words stay visible.
-    const rowStartGlobalBar = Math.floor(startBar / BARS_PER_ROW) * BARS_PER_ROW;
+    const rowStartGlobalBar = Math.floor(startBar / rowBars) * rowBars;
     const { page: lyricPage, localBar: lyricBar } = barAt(rowStartGlobalBar);
     const text = block.section ? `${block.section} ${block.lyric}`.trim() : block.lyric;
     if (text) {
       const existing = lyricPage.barLyrics[lyricBar];
       lyricPage.barLyrics[lyricBar] = existing ? `${existing} / ${text}` : text;
-      filledRowSet.add(rowStartGlobalBar / BARS_PER_ROW);
+      filledRowSet.add(rowStartGlobalBar / rowBars);
     }
 
-    // Stamp this line's chords across its `spread` bars.
+    // Stamp this line's chords across its bars. A line with more chords than
+    // `spread` bars can hold grows extra bars instead of overwriting slots.
+    const lineBars = Math.max(spread, Math.ceil(block.chords.length / slots));
     block.chords.forEach((raw, i) => {
       const { entry, mapped } = normalizeChord(raw, index);
       if (!mapped && raw.trim()) unmapped.add(raw.trim());
       const name = entry ? entry.name : raw.replace(/\/[A-G](#|b)?$/, '');
 
-      const barOffset = i % spread;
-      const slot = Math.min(slots - 1, Math.floor(i / spread));
+      // Space chords evenly, in reading order, over the line's bar*slot positions.
+      const pos = Math.floor((i * lineBars * slots) / block.chords.length);
+      const barOffset = Math.floor(pos / slots);
+      const slot = pos % slots;
       const { page, localBar } = barAt(startBar + barOffset);
 
       page.barBeatChords[localBar][slot] = name;
@@ -295,7 +313,7 @@ export function textToPages(
     });
 
     // Advance the cursor past the bars this line occupied.
-    bar = startBar + spread;
+    bar = startBar + lineBars;
   });
 
   if (pages.length === 0) pages.push(emptyPage(slots));
